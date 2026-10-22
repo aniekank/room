@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keys · Room</title>
+<link rel="stylesheet" href="/room.css">
+<style>
+  body { background: radial-gradient(ellipse at 30% 20%, #2a1d33 0%, #0d0b10 60%); }
+  .top { height: 12vh; }
+  .clock { font-size: 7vw; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+  .clock.done { color: #9fe0a8; }
+  .streak { text-align: right; font-size: 1.5vw; }
+  .streak b { display: block; font-size: 3.4vw; color: #f6c26b; }
+  .setname { margin-top: 1.5vh; }
+  .setname h1 { margin: 0.4vh 0 0; font-size: 2.8vw; font-weight: 700; }
+  .setname .tip { margin-top: 0.8vh; font-size: 1.45vw; max-width: 70vw; line-height: 1.35; color: rgba(243,237,228,.8); }
+  .chordline { margin-top: 2.5vh; }
+  .chip { font-size: 1.8vw; padding: 1vh 1.6vw; margin-right: 1vw; border-radius: 1vw; background: rgba(255,255,255,.06); color: rgba(243,237,228,.55); }
+  .chip.on { background: #f6c26b; color: #1a1220; font-weight: 800; }
+  .big { font-size: 5vw; font-weight: 800; line-height: 1; margin-right: 2.5vw; min-width: 16vw; }
+  .notes { font-size: 1.4vw; margin-top: 1.2vh; }
+  #kb { position: absolute; left: 4vw; right: 4vw; bottom: 13vh; height: 21vh; }
+  .phases { position: absolute; left: 4vw; right: 4vw; bottom: 4vh; }
+  .ph { -webkit-flex: 1; flex: 1; margin-right: 1vw; padding-top: 1.2vh; border-top: 0.5vh solid rgba(255,255,255,.12); font-size: 1.3vw; color: rgba(243,237,228,.45); }
+  .ph:last-child { margin-right: 0; }
+  .ph b { display: block; font-size: 1.7vw; color: rgba(243,237,228,.7); }
+  .ph.on { border-color: #f6c26b; color: #f3ede4; }
+  .ph.on b { color: #f6c26b; }
+  .ph.past { border-color: rgba(246,194,107,.4); }
+  .refs { font-size: 1.2vw; margin-top: 0.6vh; }
+  .hint { top: 1.6vh; bottom: auto; right: 14vw; }
+</style>
+</head>
+<body>
+<div class="safe">
+  <div class="row top">
+    <div class="grow">
+      <div class="kicker">Keys · 20 minutes · <span id="today"></span></div>
+      <div class="clock mono" id="clock">20:00</div>
+    </div>
+    <div class="streak dim">streak<b id="streak">–</b>days</div>
+  </div>
+  <div class="setname">
+    <div class="kicker" id="genre"></div>
+    <h1 id="title"></h1>
+    <div class="tip" id="tip"></div>
+    <div class="refs dim" id="refs"></div>
+  </div>
+  <div class="row chordline"><div class="big" id="sym"></div><div class="col"><div class="row" id="chips"></div><div class="notes dim mono" id="notes"></div></div></div>
+</div>
+<svg id="kb" preserveAspectRatio="none"></svg>
+<div class="row phases" id="phases"></div>
+<div class="hint">OK play chord · ◀ ▶ chords · ▲ sound on/off · 0 menu</div>
+
+<script src="/room.js"></script>
+<script src="/chords.js"></script>
+<script>
+var LOW = 36, HIGH = 72;           // C2..C5: a 37-key board
+var TOTAL = 20 * 60;
+var PHASES = [
+  { until: 5 * 60, name: 'Learn the grip', what: 'First chord only. Eyes closed by the end.' },
+  { until: 12 * 60, name: 'Run it', what: 'Play along as the TV loops the progression.' },
+  { until: 18 * 60, name: 'Move it', what: 'Same shapes, new key every 90s.' },
+  { until: TOTAL, name: 'Make it yours', what: 'Free play. Change the rhythm, add a melody.' }
+];
+var FLATS = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B'];
+var SHARPS = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+var NAMES = FLATS;
+
+var dayIndex = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
+var set = CHORD_SETS[dayIndex % CHORD_SETS.length];
+// Spell notes the way the key does: F♯ in G, G♭ in D♭.
+if (!/♭|^F |^(D|G|C|F) minor/.test(set.key)) NAMES = SHARPS;
+var start = Date.now(), idx = 0, shift = 0, sound = true, logged = false, lastAuto = -1, lastShiftStep = 0;
+
+/* ---------- Rhodes-ish FM voice (WebAudio, no samples) ---------- */
+var ctx = null, master = null;
+function audio() {
+  if (ctx) return;
+  var AC = window.AudioContext || window.webkitAudioContext;
+  ctx = new AC();
+  var comp = ctx.createDynamicsCompressor();
+  master = ctx.createGain();
+  master.gain.value = 0.55;
+  var trem = ctx.createGain(), lfo = ctx.createOscillator(), depth = ctx.createGain();
+  lfo.frequency.value = 4.6; depth.gain.value = 0.12; trem.gain.value = 0.88;
+  lfo.connect(depth); depth.connect(trem.gain); lfo.start();
+  master.connect(trem); trem.connect(comp); comp.connect(ctx.destination);
+}
+function note(m, when, vel) {
+  var f = 440 * Math.pow(2, (m - 69) / 12);
+  var car = ctx.createOscillator(), mod = ctx.createOscillator(), modG = ctx.createGain(), amp = ctx.createGain();
+  car.frequency.value = f; mod.frequency.value = f;
+  modG.gain.setValueAtTime(f * 2.2 * vel, when);
+  modG.gain.exponentialRampToValueAtTime(f * 0.15, when + 1.2);
+  amp.gain.setValueAtTime(0.0001, when);
+  amp.gain.exponentialRampToValueAtTime(0.18 * vel, when + 0.006);
+  amp.gain.exponentialRampToValueAtTime(0.0008, when + 3.4);
+  mod.connect(modG); modG.connect(car.frequency); car.connect(amp); amp.connect(master);
+  car.start(when); mod.start(when); car.stop(when + 3.5); mod.stop(when + 3.5);
+}
+function play(notes) {
+  if (!sound) return;
+  audio();
+  var t = ctx.currentTime + 0.02;
+  notes.forEach(function (m, i) { note(m, t + i * 0.018, i === 0 ? 0.9 : 0.7); });
+}
+
+/* ---------- transposition that stays on the 37 keys ---------- */
+function moved(notes) {
+  if (!shift) return notes;
+  var options = [shift, shift - 12, shift + 12];
+  for (var i = 0; i < options.length; i++) {
+    var s = options[i], ok = notes.every(function (m) { return m + s >= LOW && m + s <= HIGH; });
+    if (ok) return notes.map(function (m) { return m + s; });
+  }
+  return notes.map(function (m) { var x = m + shift; while (x > HIGH) x -= 12; while (x < LOW) x += 12; return x; });
+}
+function symFor(sym) {
+  if (!shift) return sym;
+  // re-spell the root: first letter (+ accidental) of the symbol
+  var m = sym.match(/^([A-G])([♭♯]?)(.*?)(\/([A-G])([♭♯]?))?$/);
+  if (!m) return sym;
+  function pc(l, a) { return ({ C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 })[l] + (a === '♭' ? -1 : a === '♯' ? 1 : 0); }
+  function nm(p) { return NAMES[((p + shift) % 12 + 12) % 12]; }
+  return nm(pc(m[1], m[2])) + m[3] + (m[4] ? '/' + nm(pc(m[5], m[6])) : '');
+}
+
+/* ---------- drawing ---------- */
+function drawKeys(on) {
+  var svg = document.getElementById('kb'), whites = [], blacks = [];
+  for (var m = LOW; m <= HIGH; m++) ([1, 3, 6, 8, 10].indexOf(m % 12) >= 0 ? blacks : whites).push(m);
+  var W = 1000, H = 220, ww = W / whites.length, out = '';
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  whites.forEach(function (m, i) {
+    var lit = on.indexOf(m) >= 0, lh = on[0] === m;
+    out += '<rect x="' + (i * ww + 1) + '" y="0" width="' + (ww - 2) + '" height="' + H + '" rx="6" fill="' +
+      (lh ? '#8fc1ff' : lit ? '#f6c26b' : '#efe8dc') + '"/>';
+    if (m % 12 === 0) out += '<text x="' + (i * ww + ww / 2) + '" y="' + (H - 12) + '" font-size="16" text-anchor="middle" fill="#6b6370">C' + (Math.floor(m / 12) - 1) + '</text>';
+  });
+  blacks.forEach(function (m) {
+    var i = whites.indexOf(m - 1), lit = on.indexOf(m) >= 0, lh = on[0] === m;
+    out += '<rect x="' + ((i + 1) * ww - ww * 0.32) + '" y="0" width="' + (ww * 0.64) + '" height="' + (H * 0.62) + '" rx="4" fill="' +
+      (lh ? '#4f8fe0' : lit ? '#e0a23e' : '#1d1820') + '"/>';
+  });
+  svg.innerHTML = out;
+}
+function render() {
+  var c = set.chords[idx], notes = moved(c.notes);
+  document.getElementById('sym').textContent = symFor(c.sym);
+  document.getElementById('notes').textContent = 'LH ' + nameOf(notes[0]) + '  ·  RH ' + notes.slice(1).map(nameOf).join(' ');
+  document.getElementById('chips').innerHTML = set.chords.map(function (k, i) {
+    return '<div class="chip' + (i === idx ? ' on' : '') + '">' + symFor(k.sym) + '</div>';
+  }).join('');
+  drawKeys(notes);
+}
+function nameOf(m) { return NAMES[m % 12] + (Math.floor(m / 12) - 1); }
+function drawPhases(el) {
+  document.getElementById('phases').innerHTML = PHASES.map(function (p, i) {
+    var from = i ? PHASES[i - 1].until : 0, cls = el >= p.until ? 'past' : el >= from ? 'on' : '';
+    return '<div class="ph ' + cls + '"><b>' + p.name + '</b>' + p.what + '</div>';
+  }).join('');
+}
+
+/* ---------- the 20 minutes ---------- */
+function finish(minutes) {
+  if (logged) return;
+  logged = true;
+  Room.post('/api/practice/log', { minutes: minutes, set: set.title }).then(function (s) {
+    if (s) document.getElementById('streak').textContent = s.streak;
+  });
+}
+function tick() {
+  var el = Math.floor((Date.now() - start) / 1000), left = Math.max(0, TOTAL - el);
+  var clock = document.getElementById('clock');
+  clock.textContent = Room.pad(Math.floor(left / 60)) + ':' + Room.pad(left % 60);
+  drawPhases(el);
+  if (left === 0) {
+    clock.textContent = 'Done.';
+    clock.className = 'clock mono done';
+    finish(20);
+    return;
+  }
+  // Run it: TV loops the progression, one chord every 4 seconds.
+  if (el >= PHASES[0].until && el < PHASES[2].until) {
+    var step = Math.floor(el / 4);
+    if (step !== lastAuto) { lastAuto = step; idx = step % set.chords.length; render(); play(moved(set.chords[idx].notes)); }
+  }
+  // Move it: up a fourth every 90 seconds.
+  if (el >= PHASES[1].until && el < PHASES[2].until) {
+    var k = Math.floor((el - PHASES[1].until) / 90) + 1;
+    if (k !== lastShiftStep) { lastShiftStep = k; shift = (k * 5) % 12; Room.toast('New key: ' + symFor(set.chords[0].sym)); render(); }
+  }
+  if (el === PHASES[2].until) { shift = 0; render(); }
+  setTimeout(tick, 1000 - (Date.now() - start) % 1000);
+}
+
+function act(k) {
+  if (k === 'enter' || k === 'play' || k === 'playpause') play(moved(set.chords[idx].notes));
+  else if (k === 'right') { idx = (idx + 1) % set.chords.length; render(); play(moved(set.chords[idx].notes)); }
+  else if (k === 'left') { idx = (idx + set.chords.length - 1) % set.chords.length; render(); play(moved(set.chords[idx].notes)); }
+  else if (k === 'up' || k === 'mute') { sound = !sound; Room.toast(sound ? 'Sound on' : 'Sound off'); }
+  else if (k === 'back') { location.href = '/'; }
+  else return false;
+}
+
+document.getElementById('genre').textContent = set.genre + ' · ' + set.key;
+document.getElementById('title').textContent = set.title;
+document.getElementById('tip').textContent = set.tip;
+document.getElementById('refs').textContent = 'Ears: ' + set.refs;
+document.getElementById('today').textContent = new Date().toDateString().slice(0, 10);
+Room.get('/api/practice').then(function (s) { document.getElementById('streak').textContent = s.streak; });
+render();
+tick();
+setTimeout(function () { play(moved(set.chords[0].notes)); }, 800);
+Room.keys(act);
+Room.poll(function (c) { if (c.key) act(c.key); });
+Room.report(function () { return { channel: 'nag', set: set.title, chord: symFor(set.chords[idx].sym), elapsed: Math.floor((Date.now() - start) / 1000) }; });
+window.addEventListener('pagehide', function () {
+  var m = Math.floor((Date.now() - start) / 60000);
+  if (!logged && m >= 1 && navigator.sendBeacon) {
+    navigator.sendBeacon('/api/practice/log', new Blob([JSON.stringify({ minutes: m, set: set.title })], { type: 'application/json' }));
+  }
+});
+</script>
+</body>
+</html>

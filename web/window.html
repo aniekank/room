@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Window · Room</title>
+<link rel="stylesheet" href="/room.css">
+<style>
+  body { background: #000; }
+  #view { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #view iframe { width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 55vh;
+    background: -webkit-linear-gradient(top, rgba(0,0,0,0), rgba(0,0,0,.82)); background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.82)); }
+  .info { position: absolute; left: 4vw; right: 4vw; bottom: 6vh; }
+  .city { font-size: 7.5vw; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+  .time { font-size: 4.5vw; font-weight: 300; margin-left: 2vw; }
+  .wx { font-size: 2vw; margin-left: 2vw; color: rgba(243,237,228,.75); }
+  .lens { font-size: 1.7vw; max-width: 62vw; line-height: 1.35; margin-top: 1.5vh; color: rgba(243,237,228,.82); }
+  .radio { margin-top: 2.4vh; font-size: 1.6vw; }
+  .radio b { color: #f6c26b; }
+  .dot { display: inline-block; width: 1vw; height: 1vw; border-radius: 50%; background: #e2584c; margin-right: .8vw; vertical-align: middle; }
+  .dot.off { background: #555; }
+  .live { position: absolute; left: 4vw; top: 4vh; font-size: 1.2vw; letter-spacing: .25em; text-transform: uppercase; color: rgba(255,255,255,.75); background: rgba(0,0,0,.4); padding: .6vh 1vw; }
+  .strip { position: absolute; right: 4vw; top: 4vh; text-align: right; font-size: 1.3vw; }
+  .strip span { margin-left: 1.4vw; color: rgba(255,255,255,.45); }
+  .strip span.on { color: #fff; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div class="shade"></div>
+<div class="live" id="live"></div>
+<div class="strip" id="strip"></div>
+<div class="info">
+  <div class="row" style="-webkit-align-items: baseline; align-items: baseline;">
+    <div class="city" id="city">…</div><div class="time mono" id="time"></div><div class="wx" id="wx"></div>
+  </div>
+  <div class="lens" id="lens"></div>
+  <div class="radio"><span class="dot off" id="dot"></span><span id="radio">Tuning…</span></div>
+</div>
+<audio id="audio" preload="none"></audio>
+<div class="hint">◀ ▶ city · ▲▼ station · OK new view · 0 menu</div>
+
+<script src="/room.js"></script>
+<script>
+var WX = { 0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast', 45: 'fog', 48: 'fog', 51: 'drizzle', 53: 'drizzle', 55: 'drizzle',
+  61: 'rain', 63: 'rain', 65: 'heavy rain', 71: 'snow', 73: 'snow', 75: 'heavy snow', 80: 'showers', 81: 'showers', 82: 'storms', 95: 'thunderstorms', 96: 'thunderstorms', 99: 'thunderstorms' };
+var cities = [], cityId = null, data = null, st = 0, urlI = 0, viewI = 0, player = null, playerReady = false, fmt = null;
+var audio = document.getElementById('audio');
+
+function loadCity(id) {
+  cityId = id;
+  drawStrip();
+  document.getElementById('city').textContent = (cities.filter(function (c) { return c.id === id; })[0] || {}).name || '…';
+  document.getElementById('radio').textContent = 'Tuning…';
+  Room.get('/api/city?id=' + id).then(function (d) {
+    data = d; st = 0; urlI = 0; viewI = 0;
+    fmt = null;
+    try { fmt = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: d.tz }); } catch (e) {}
+    document.getElementById('lens').textContent = d.lens;
+    var w = d.weather;
+    document.getElementById('wx').textContent = w ? (w.temp != null ? w.temp + '°' + w.unit : w.temp_f + '°F') + ' · ' + (WX[w.code] || '') + (w.day ? '' : ' · night') : '';
+    tune();
+    showView();
+  });
+}
+
+function tune() {
+  var s = data && data.stations[st];
+  if (!s) { document.getElementById('radio').textContent = 'No station reachable right now'; return; }
+  audio.src = s.urls[urlI % s.urls.length];
+  audio.play();
+  document.getElementById('radio').innerHTML = '<b>' + s.name + '</b>' + (s.note ? ' · ' + s.note : '') +
+    ' <span class="dim">(' + (st + 1) + '/' + data.stations.length + ')</span>';
+}
+audio.addEventListener('playing', function () { document.getElementById('dot').className = 'dot'; });
+audio.addEventListener('error', function () {
+  document.getElementById('dot').className = 'dot off';
+  var s = data && data.stations[st];
+  if (!s) return;
+  urlI++;
+  if (urlI >= s.urls.length) { urlI = 0; st = (st + 1) % data.stations.length; }
+  setTimeout(tune, 1500);
+});
+
+function showView() {
+  var v = data && data.views[viewI % Math.max(1, data.views.length)];
+  document.getElementById('live').textContent = v ? (v.live ? '● Live view' : 'Street view · recorded') : 'No view found';
+  if (!v || !playerReady) return;
+  var start = v.live ? 0 : Math.floor((v.duration || 0) * (0.1 + Math.random() * 0.7));
+  player.loadVideoById({ videoId: v.id, startSeconds: start });
+  player.mute();
+}
+
+function drawStrip() {
+  document.getElementById('strip').innerHTML = cities.map(function (c) {
+    return '<span class="' + (c.id === cityId ? 'on' : '') + '">' + c.name + '</span>';
+  }).join('');
+}
+
+function shiftCity(d) {
+  var i = 0;
+  cities.forEach(function (c, j) { if (c.id === cityId) i = j; });
+  loadCity(cities[(i + d + cities.length) % cities.length].id);
+}
+
+function act(k, c) {
+  if (k === 'right' || k === 'nextcity') shiftCity(1);
+  else if (k === 'left' || k === 'prevcity') shiftCity(-1);
+  else if (k === 'up' || k === 'nextstation') { st = (st + 1) % data.stations.length; urlI = 0; tune(); }
+  else if (k === 'down') { st = (st + data.stations.length - 1) % data.stations.length; urlI = 0; tune(); }
+  else if (k === 'enter' || k === 'nextview') { viewI++; showView(); }
+  else if (k === 'city' && c && c.id) loadCity(c.id);
+  else if (k === 'play' || k === 'pause' || k === 'playpause') { if (audio.paused) audio.play(); else audio.pause(); }
+  else if (k === 'back') location.href = '/';
+  else return false;
+}
+
+setInterval(function () {
+  if (fmt) document.getElementById('time').textContent = fmt.format(new Date());
+}, 1000);
+
+Room.get('/api/cities').then(function (r) {
+  cities = r.cities;
+  var want = (location.hash || '').replace('#', '');
+  loadCity(want || r.today);
+});
+window.addEventListener('hashchange', function () { var id = location.hash.replace('#', ''); if (id) loadCity(id); });
+Room.youtube('view', {}, function (p) { player = p; playerReady = true; p.mute(); showView(); },
+  function (s) { if (s === 0) { viewI++; showView(); } },
+  function () { viewI++; setTimeout(showView, 800); });
+Room.keys(function (k) { return act(k); });
+Room.poll(function (c) { act(c.key || c.do, c); });
+Room.report(function () {
+  var s = data && data.stations[st];
+  return { channel: 'window', city: cityId, station: s ? s.name : '', playing: !audio.paused };
+});
+</script>
+</body>
+</html>

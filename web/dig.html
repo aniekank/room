@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dig Tube · Room</title>
+<link rel="stylesheet" href="/room.css">
+<style>
+  body { background: #000; }
+  #player { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #player iframe { width: 100%; height: 100%; border: 0; }
+  .lower { position: absolute; left: 4vw; bottom: 6vh; max-width: 70vw; padding: 2vh 2vw;
+    background: rgba(10, 8, 12, 0.78); border-left: 0.5vw solid #f6c26b; -webkit-transition: opacity .6s; transition: opacity .6s; }
+  .lower.off { opacity: 0; }
+  .lower .kicker { color: #f6c26b; }
+  .lower h2 { margin: 0.8vh 0 0; font-size: 2.4vw; font-weight: 700; line-height: 1.2; }
+  .bug { position: absolute; right: 4vw; top: 4vh; font-size: 1.2vw; letter-spacing: .25em; color: rgba(255,255,255,.55); text-transform: uppercase; }
+  .bug b { color: #f6c26b; }
+  .saved { position: absolute; right: 4vw; top: 9vh; font-size: 1.4vw; color: #f6c26b; }
+  .nowline { position: absolute; left: 4vw; top: 3.4vh; max-width: 58vw; padding: .7vh 1.1vw; background: rgba(10, 8, 12, 0.55);
+    font-size: 1.35vw; color: rgba(255,255,255,.88); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: .4vw; }
+  .nowline b { color: #f6c26b; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="player"></div>
+<div class="bug">Dig Tube · <b id="lane">all lanes</b></div>
+<div class="saved" id="saved"></div>
+<div class="nowline" id="nowline"></div>
+<div class="lower" id="lower"><div class="kicker" id="lkick"></div><h2 id="ltitle">Finding something…</h2></div>
+<div class="hint">OK save moment · ▶ next · ▲▼ lane · ⏯ pause · 0 menu</div>
+
+<script src="/room.js"></script>
+<script>
+var DWELL = 6 * 60;      // channel-surf: move on after 6 minutes unless you're watching closely
+var player = null, clip = null, lanes = [], laneIdx = -1, startedAt = 0, saves = 0, hideT = null;
+
+function laneName() { return laneIdx < 0 ? null : lanes[laneIdx]; }
+
+function showLower(ms) {
+  var el = document.getElementById('lower');
+  el.className = 'lower';
+  clearTimeout(hideT);
+  hideT = setTimeout(function () { el.className = 'lower off'; }, ms || 9000);
+}
+
+// reason tells the server how the last clip ended: 'skip' (you pressed next), 'end', 'auto'
+// (dwell timer), 'lane', 'error'. A skip inside 45s means "not for me" and the clip is retired.
+function next(reason) {
+  var q = '/api/dig/next?reason=' + (reason || 'start');
+  if (clip) q += '&prev=' + clip.id + '&watched=' + Math.round((Date.now() - startedAt) / 1000) + '&last_lane=' + encodeURIComponent(clip.lane);
+  if (laneName()) q += '&lane=' + encodeURIComponent(laneName());
+  Room.get(q).then(function (c) {
+    if (!c || c.error) { clip = null; document.getElementById('ltitle').textContent = 'Building the pool\u2026 (first run takes a few minutes)'; setTimeout(next, 15000); return; }
+    clip = c;
+    // Long compilations: drop in somewhere in the middle, like flipping onto a channel.
+    var start = c.duration > 900 ? Math.floor(c.duration * (0.1 + Math.random() * 0.6)) : 0;
+    player.loadVideoById({ videoId: c.id, startSeconds: start });
+    startedAt = Date.now();
+    document.getElementById('lkick').textContent = c.lane + (c.duration ? ' · ' + Math.round(c.duration / 60) + ' min' : '');
+    document.getElementById('ltitle').textContent = c.title;
+    var now = document.getElementById('nowline');
+    now.innerHTML = '<b></b> ';
+    now.firstChild.textContent = c.lane + ' ·';
+    now.appendChild(document.createTextNode(c.title));
+    showLower();
+  });
+}
+
+function save() {
+  // Report first so the server stamps the exact second, then ask it to save.
+  Room.post('/api/tv', state()).then(function () { return Room.post('/api/dig/save', {}); }).then(function (r) { savedToast(r && r.ok); });
+}
+
+function savedToast(ok) {
+  if (ok) { saves++; document.getElementById('saved').textContent = saves + ' saved this session'; Room.toast('Saved to your crate'); }
+  else Room.toast('Could not save');
+}
+
+function state() {
+  var t = 0;
+  try { t = player && player.getCurrentTime ? player.getCurrentTime() : 0; } catch (e) {}
+  return { channel: 'dig', video: clip ? clip.id : null, title: clip ? clip.title : '', lane: clip ? clip.lane : '', t: Math.floor(t),
+           paused: player && player.getPlayerState ? player.getPlayerState() === 2 : false, laneFilter: laneName() };
+}
+
+function setLane(d) {
+  laneIdx = laneIdx + d;
+  if (laneIdx < -1) laneIdx = lanes.length - 1;
+  if (laneIdx >= lanes.length) laneIdx = -1;
+  document.getElementById('lane').textContent = laneName() || 'all lanes';
+  Room.toast(laneName() || 'All lanes');
+  next('lane');
+}
+
+function act(k, c) {
+  if (k === 'saved') savedToast(c && c.ok);
+  else if (k === 'enter' || k === 'red') save();
+  else if (k === 'right' || k === 'ff' || k === 'next') next('skip');
+  else if (k === 'up') setLane(1);
+  else if (k === 'down') setLane(-1);
+  else if (k === 'play' || k === 'pause' || k === 'playpause') {
+    if (player.getPlayerState() === 2) player.playVideo(); else player.pauseVideo();
+  }
+  else if (k === 'left' || k === 'info') showLower(6000);
+  else if (k === 'lane') { laneIdx = c && c.lane ? lanes.indexOf(c.lane) : -1; setLane(0); }
+  else if (k === 'back') location.href = '/';
+  else return false;
+}
+
+Room.get('/api/dig/lanes').then(function (r) { lanes = r.lanes; });
+Room.youtube('player', {}, function (p) { player = p; next(); },
+  function (st) { if (st === 0) next('end'); },                  // ended
+  function (code) {                                               // 101/150: owner blocked embedding
+    if (clip) Room.post('/api/dig/bad', { id: clip.id });
+    setTimeout(function () { next('error'); }, 500);
+  });
+setInterval(function () {
+  if (player && player.getPlayerState && player.getPlayerState() === 1 && (Date.now() - startedAt) / 1000 > DWELL) next('auto');
+}, 5000);
+Room.keys(function (k) { return act(k); });
+Room.poll(function (c) { act(c.key || c.do, c); });
+Room.report(state);
+</script>
+</body>
+</html>

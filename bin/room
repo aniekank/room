@@ -1,0 +1,4 @@
+#!/bin/bash
+# room CLI. Uses the project venv when run from the Desktop copy.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec "$DIR/.venv/bin/python" "$DIR/room.py" "$@"

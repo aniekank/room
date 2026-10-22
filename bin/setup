@@ -1,0 +1,29 @@
+#!/bin/bash
+# First run: make the project venv, install the dependencies, find and pair the TV, install the agents.
+set -e
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$DIR"
+
+if [ "$(uname)" != "Darwin" ]; then
+  echo "Room runs on macOS only (it uses launchd and macOS notifications)."; exit 1
+fi
+PY="$(command -v python3 || true)"
+if [ -z "$PY" ]; then
+  echo "Python 3 not found. Install it with: xcode-select --install  (or brew install python)"; exit 1
+fi
+
+echo "1/4  Making .venv and installing samsungtvws + yt-dlp"
+[ -d .venv ] || "$PY" -m venv .venv
+.venv/bin/pip install -q --upgrade pip
+.venv/bin/pip install -q -r requirements.txt
+
+echo "2/4  Looking for a Samsung TV on this Wi-Fi (turn it on first)"
+bin/room find || true
+
+echo "3/4  Pairing: press Allow on the TV when it asks"
+bin/room pair || echo "     Pairing skipped. You can still open http://<mac-ip>:8788 in the TV browser. Retry later with: bin/room pair"
+
+echo "4/4  Installing the server and the daily Keys nag (launchd)"
+bin/room install "$@"
+echo
+bin/room status

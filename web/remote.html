@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d0b10">
+<title>Room Remote</title>
+<style>
+  :root { --bg: #0d0b10; --card: #1a1620; --ink: #f3ede4; --dim: rgba(243,237,228,.55); --gold: #f6c26b; --line: rgba(255,255,255,.08); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.4 -apple-system, "Helvetica Neue", sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  h1 { font-size: 15px; letter-spacing: .4em; text-transform: uppercase; margin: 0; color: var(--dim); font-weight: 600; }
+  .pill { font-size: 13px; padding: 4px 10px; border-radius: 99px; background: var(--card); color: var(--dim); }
+  .pill.on { color: #9fe0a8; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button { flex: 1; padding: 14px 6px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 15px; font-weight: 600; }
+  .tabs button.on { border-color: var(--gold); color: var(--gold); }
+  .card { background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+  .kicker { font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
+  .title { font-size: 19px; font-weight: 700; margin: 4px 0 2px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .grid button, .wide { padding: 16px 8px; border-radius: 14px; border: 0; background: #2a2431; color: var(--ink); font-size: 16px; font-weight: 600; }
+  .grid button:active, .wide:active, .save:active { transform: scale(.97); }
+  .save { width: 100%; padding: 28px; border-radius: 20px; border: 0; background: var(--gold); color: #1a1220; font-size: 22px; font-weight: 800; margin-top: 12px; }
+  .wide { width: 100%; margin-top: 8px; }
+  select { width: 100%; margin-top: 10px; padding: 12px; border-radius: 12px; background: #2a2431; color: var(--ink); border: 0; font-size: 16px; }
+  .list a { display: block; padding: 10px 0; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; font-size: 14px; }
+  .list a span { color: var(--dim); }
+  .cities { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .cities button { padding: 10px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 15px; }
+  .cities button.on { border-color: var(--gold); color: var(--gold); }
+  .dim { color: var(--dim); }
+  .hide { display: none; }
+  .msg { font-size: 13px; color: var(--dim); margin-top: 8px; min-height: 18px; }
+</style>
+</head>
+<body>
+<header><h1>Room</h1><span class="pill" id="online">TV offline</span></header>
+
+<div class="tabs">
+  <button data-ch="nag">Keys</button><button data-ch="dig">Dig</button><button data-ch="window">Window</button><button data-ch="">Home</button>
+</div>
+
+<section id="p-off" class="card">
+  <div class="kicker">TV</div>
+  <div class="title">Not showing Room right now</div>
+  <div class="dim">Tap a channel above. If the TV is off, the Mac wakes it and opens the channel.</div>
+</section>
+
+<section id="p-nag" class="card hide">
+  <div class="kicker">Keys</div>
+  <div class="title" id="nagSet"></div>
+  <div class="dim" id="nagMeta"></div>
+  <div class="grid">
+    <button data-key="left">◀ Chord</button><button data-key="enter">Play</button><button data-key="right">Chord ▶</button>
+  </div>
+  <button class="wide" data-key="up">Sound on / off</button>
+</section>
+
+<section id="p-dig" class="hide">
+  <div class="card">
+    <div class="kicker" id="digLane"></div>
+    <div class="title" id="digTitle"></div>
+    <button class="save" id="save">Save this moment</button>
+    <div class="grid">
+      <button data-do="playpause">⏯</button><button data-do="info">Info</button><button data-do="next">Next ▶</button>
+    </div>
+    <select id="lanes"><option value="">All lanes</option></select>
+    <div class="msg" id="digMsg"></div>
+  </div>
+  <div class="card"><div class="kicker">Recent saves</div><div class="list" id="saves"></div></div>
+</section>
+
+<section id="p-window" class="card hide">
+  <div class="kicker">World Window</div>
+  <div class="title" id="winCity"></div>
+  <div class="dim" id="winStation"></div>
+  <div class="cities" id="cities"></div>
+  <div class="grid">
+    <button data-do="nextstation">Station</button><button data-do="nextview">New view</button><button data-do="playpause">⏯ Radio</button>
+  </div>
+</section>
+
+<div class="msg" id="msg"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let state = null;
+
+const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+const cmd = (c) => post('/api/cmd', c);
+
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
+  const ch = b.dataset.ch;
+  if (state && state.tv_online) { cmd({ go: '/' + ch }); return; }
+  $('msg').textContent = 'Waking the TV…';
+  try {
+    const r = await post('/api/tvctl', { channel: ch });
+    $('msg').textContent = r.ok ? 'Opened on the TV.' : 'Could not reach the TV: ' + r.error;
+  } catch (e) { $('msg').textContent = 'Could not reach the Mac.'; }
+});
+document.querySelectorAll('[data-key]').forEach(b => b.onclick = () => cmd({ key: b.dataset.key }));
+document.querySelectorAll('[data-do]').forEach(b => b.onclick = () => cmd({ do: b.dataset.do }));
+$('save').onclick = async () => {
+  const r = await cmd({ do: 'save' });
+  $('digMsg').textContent = r.ok ? 'Saved at ' + fmtT(r.saved.t) + '.' : 'Nothing playing to save.';
+  if (navigator.vibrate) navigator.vibrate(30);
+  refresh();
+};
+$('lanes').onchange = (e) => cmd({ do: 'lane', lane: e.target.value });
+
+fetch('/api/dig/lanes').then(r => r.json()).then(r => r.lanes.forEach(l => $('lanes').add(new Option(l, l))));
+fetch('/api/cities').then(r => r.json()).then(r => {
+  $('cities').innerHTML = r.cities.map(c => `<button data-city="${c.id}">${c.name}</button>`).join('');
+  $('cities').querySelectorAll('button').forEach(b => b.onclick = () => cmd({ do: 'city', id: b.dataset.city }));
+});
+
+const fmtT = (t) => Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+
+async function refresh() {
+  try { state = await fetch('/api/state').then(r => r.json()); } catch (e) { return; }
+  const tv = state.tv || {}, ch = state.tv_online ? tv.channel : null;
+  $('online').textContent = state.tv_online ? 'TV on · ' + (ch || 'home') : 'TV offline';
+  $('online').className = 'pill' + (state.tv_online ? ' on' : '');
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', (b.dataset.ch || 'home') === ch));
+  ['off', 'nag', 'dig', 'window'].forEach(p => $('p-' + p).classList.toggle('hide', p !== (ch && ch !== 'home' ? ch : 'off')));
+  if (ch === 'nag') {
+    $('nagSet').textContent = tv.set || '';
+    $('nagMeta').textContent = `${tv.chord || ''} · ${Math.floor((tv.elapsed || 0) / 60)} min in · ${state.practice.streak}-day streak`;
+  }
+  if (ch === 'dig') {
+    $('digLane').textContent = tv.lane || '';
+    $('digTitle').textContent = tv.title || '';
+    $('lanes').value = tv.laneFilter || '';
+  }
+  if (ch === 'window') {
+    $('winCity').textContent = tv.city ? tv.city[0].toUpperCase() + tv.city.slice(1) : '';
+    $('winStation').textContent = tv.station ? (tv.playing ? 'On air: ' : 'Paused: ') + tv.station : '';
+    $('cities').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.city === tv.city));
+  }
+  $('saves').innerHTML = state.saves.map(s => `<a href="${s.url}" target="_blank">${s.title} <span>· ${fmtT(s.t)} · ${s.lane}</span></a>`).join('') || '<div class="dim" style="padding-top:8px">Nothing yet. Hit Save when something grabs you.</div>';
+}
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

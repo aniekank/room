@@ -1,0 +1,23 @@
+/* TV canvas. Sized in vw/vh so it reads the same on a 1280 or 1920 browser viewport,
+   with a 4% safe area for overscan. No grid, no flex gap (old Tizen engine). */
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+body {
+  background: #0d0b10; color: #f3ede4;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.safe { position: absolute; left: 4vw; right: 4vw; top: 4vh; bottom: 4vh; }
+.row { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
+.col { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; }
+.grow { -webkit-flex: 1; flex: 1; }
+.dim { color: rgba(243, 237, 228, 0.55); }
+.kicker { font-size: 1.25vw; letter-spacing: 0.3em; text-transform: uppercase; color: rgba(243, 237, 228, 0.6); }
+.mono { font-family: Menlo, "DejaVu Sans Mono", monospace; }
+
+.toast {
+  position: absolute; left: 50%; bottom: 8vh; -webkit-transform: translate(-50%, 2vh); transform: translate(-50%, 2vh);
+  background: #f3ede4; color: #0d0b10; font-size: 2vw; font-weight: 700; padding: 1.2vh 2.4vw; border-radius: 99px;
+  opacity: 0; -webkit-transition: all .25s; transition: all .25s; z-index: 50;
+}
+.toast.show { opacity: 1; -webkit-transform: translate(-50%, 0); transform: translate(-50%, 0); }
+.hint { position: absolute; right: 4vw; bottom: 3vh; font-size: 1vw; color: rgba(243, 237, 228, 0.4); }

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room</title>
+<link rel="stylesheet" href="/room.css">
+<style>
+  body { background: radial-gradient(ellipse at 70% 10%, #1f2a3a 0%, #0d0b10 65%); }
+  .brand { font-size: 1.4vw; letter-spacing: .5em; text-transform: uppercase; color: rgba(243,237,228,.6); }
+  .now { font-size: 6vw; font-weight: 800; letter-spacing: -0.03em; margin-top: 1vh; }
+  .tiles { position: absolute; left: 4vw; right: 4vw; bottom: 10vh; }
+  .tile { display: block; -webkit-flex: 1; flex: 1; margin-right: 2vw; height: 38vh; padding: 3vh 2vw; box-sizing: border-box;
+    border-radius: 1.4vw; background: rgba(255,255,255,.06); color: #f3ede4; text-decoration: none; outline: none;
+    border: 0.35vw solid transparent; -webkit-transition: all .2s; transition: all .2s; position: relative; }
+  .tile:last-child { margin-right: 0; }
+  .tile:focus, .tile.sel { border-color: #f6c26b; background: rgba(246,194,107,.12); -webkit-transform: scale(1.03); transform: scale(1.03); }
+  .tile .n { font-size: 1.4vw; color: #f6c26b; font-weight: 700; }
+  .tile h2 { font-size: 3.4vw; margin: 1.5vh 0 1vh; }
+  .tile p { font-size: 1.5vw; line-height: 1.35; color: rgba(243,237,228,.7); margin: 0; }
+  .tile .foot { position: absolute; left: 2vw; bottom: 3vh; font-size: 1.4vw; color: rgba(243,237,228,.55); }
+  .tile .foot b { color: #f6c26b; }
+</style>
+</head>
+<body>
+<div class="safe">
+  <div class="brand">Room</div>
+  <div class="now mono" id="now"></div>
+  <div class="dim" style="font-size:1.6vw" id="phone"></div>
+</div>
+<div class="row tiles">
+  <a class="tile" href="/nag" id="t1"><div class="n">1</div><h2>Keys</h2><p>Today's grip, a play-along loop, a new key every 90 seconds. Twenty minutes.</p><div class="foot" id="streak"></div></a>
+  <a class="tile" href="/dig" id="t2"><div class="n">2</div><h2>Dig Tube</h2><p>Soul Train, Afrobeat TV, city pop, library records. Hit OK to save the moment.</p><div class="foot" id="saves"></div></a>
+  <a class="tile" href="/window" id="t3"><div class="n">3</div><h2>World Window</h2><p>A street, a station and the local time in a city that shaped the music.</p><div class="foot" id="today"></div></a>
+</div>
+<script src="/room.js"></script>
+<script>
+var tiles = ['t1', 't2', 't3'], sel = 0;
+function focus() { tiles.forEach(function (id, i) { document.getElementById(id).className = 'tile' + (i === sel ? ' sel' : ''); }); document.getElementById(tiles[sel]).focus(); }
+Room.keys(function (k) {
+  if (k === 'right') { sel = Math.min(2, sel + 1); focus(); }
+  else if (k === 'left') { sel = Math.max(0, sel - 1); focus(); }
+  else if (k === 'enter') location.href = document.getElementById(tiles[sel]).getAttribute('href');
+  else return false;
+});
+Room.poll(function () {});
+Room.report(function () { return { channel: 'home' }; });
+function clock() { var d = new Date(); document.getElementById('now').textContent = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+setInterval(clock, 1000); clock();
+document.getElementById('phone').textContent = 'Phone remote: ' + location.host + '/remote';
+Room.get('/api/state').then(function (s) {
+  var p = s.practice;
+  document.getElementById('streak').innerHTML = p.today ? '<b>Done today</b> · ' + p.streak + '-day streak' : (p.streak ? p.streak + '-day streak · <b>not yet today</b>' : '<b>Start a streak</b>');
+  document.getElementById('saves').innerHTML = s.saves.length ? '<b>' + s.saves.length + '</b> recent saves' : 'Nothing saved yet';
+});
+Room.get('/api/cities').then(function (r) {
+  var c = r.cities.filter(function (x) { return x.id === r.today; })[0];
+  document.getElementById('today').innerHTML = 'Today: <b>' + (c ? c.name : '') + '</b>';
+});
+focus();
+</script>
+</body>
+</html>
