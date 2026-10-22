@@ -7,7 +7,7 @@ A Samsung TV as three channels, served from your Mac. Built on a 2018 UN32M4500 
 **You need:** a Mac (macOS only: it uses launchd and macOS notifications), Python 3, and a Samsung Tizen smart TV (2016 or newer) on the same Wi-Fi. No Samsung TV? Skip the pairing and use the browser fallback below.
 
 ```bash
-git clone https://github.com/<you>/room.git ~/Desktop/Projects/Room
+git clone https://github.com/aniekank/room.git ~/Desktop/Projects/Room
 cd ~/Desktop/Projects/Room
 bin/setup          # or: bin/setup 07:45  to pick the Keys nag time
 ```

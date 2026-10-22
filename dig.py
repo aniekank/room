@@ -9,6 +9,7 @@
 import json
 import math
 import random
+import re
 import threading
 import time
 from pathlib import Path
@@ -163,11 +164,36 @@ def _search(q, n=30):
     return res.get('entries') or []
 
 
-def _keep(e):
+# Archival lanes drop clips whose title names a year past the era (reunion tours, 2015
+# "live in..." uploads). Lanes about later eras, or DJ culture that's still going, get later cutoffs.
+LATEST_YEAR = {'Neo-soul era': 2006, 'Hip-hop TV 80s-90s': 1999, 'R&B on TV 80s-90s': 1999, 'UK soul & acid jazz': 1999,
+               'Chicago house': 2100, 'Detroit techno & house': 2100, 'NYC & NJ deep house': 2100}
+DEFAULT_LATEST = 1992
+_YEAR = re.compile(r'\b(19[5-9]\d|20[0-3]\d)\b')
+
+
+def _era_ok(title, lane):
+    years = [int(y) for y in _YEAR.findall(title or '')]
+    return not years or max(years) <= LATEST_YEAR.get(lane, DEFAULT_LATEST)
+
+
+def _keep(e, lane=None):
     t = (e.get('title') or '').lower()
     d = e.get('duration') or 0
     return (e.get('id') and e.get('live_status') not in ('is_live', 'is_upcoming')
-            and 90 <= d <= 2 * 3600 and not any(w in t for w in SKIP_WORDS))
+            and 90 <= d <= 2 * 3600 and not any(w in t for w in SKIP_WORDS) and _era_ok(t, lane))
+
+
+def prune():
+    """Apply the current filters to clips already in the pool."""
+    with _lock:
+        db = load()
+        drop = [i for i, c in db['clips'].items() if not _era_ok(c['title'].lower(), c['lane'])
+                or any(w in c['title'].lower() for w in SKIP_WORDS)]
+        for i in drop:
+            del db['clips'][i]
+        save(db)
+        return len(drop)
 
 
 def run_query(lane, q):
@@ -177,7 +203,7 @@ def run_query(lane, q):
         db = load()
         added = 0
         for e in hits:
-            if not _keep(e) or e['id'] in db['banned']:
+            if not _keep(e, lane) or e['id'] in db['banned']:
                 continue
             if e['id'] not in db['clips']:
                 added += 1
