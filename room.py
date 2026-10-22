@@ -28,7 +28,7 @@ from paths import DATA  # noqa: E402
 APP = DATA.parent
 LA = Path.home() / 'Library' / 'LaunchAgents'
 SERVER_LABEL, NAG_LABEL = 'com.task.room.server', 'com.task.room.nag'
-PORT = 8788
+PORT = int(os.environ.get('ROOM_PORT', 8788))
 
 
 def _server_up():
@@ -102,7 +102,10 @@ def install(at=None):
         hh, mm = (int(x) for x in at.split(':'))
         settings.save('nag_time', f'{hh:02d}:{mm:02d}')
     at = settings.get('nag_time')
-    hh, mm = (int(x) for x in at.split(':'))
+    if not at or at == 'off':
+        hh = mm = None
+    else:
+        hh, mm = (int(x) for x in at.split(':'))
     app = APP / 'app'
     if app.exists():
         shutil.rmtree(app)
@@ -111,18 +114,24 @@ def install(at=None):
     venv = APP / 'venv'
     if not venv.exists():
         subprocess.run([sys.executable, '-m', 'venv', str(venv)], check=True)
-    has_deps = subprocess.run([str(venv / 'bin' / 'python'), '-c', 'import samsungtvws, yt_dlp'], capture_output=True).returncode == 0
+    has_deps = subprocess.run([str(venv / 'bin' / 'python'), '-c', 'import samsungtvws, yt_dlp, qrcode'], capture_output=True).returncode == 0
     if not has_deps or '--upgrade' in sys.argv:
         subprocess.run([str(venv / 'bin' / 'pip'), 'install', '-q', '--upgrade', '-r', str(SRC / 'requirements.txt')], check=True)
     py = str(venv / 'bin' / 'python')
     LA.mkdir(exist_ok=True)
     (LA / f'{SERVER_LABEL}.plist').write_text(_plist(SERVER_LABEL, [py, str(app / 'room.py'), 'serve'],
                                                      '<key>RunAtLoad</key><true/><key>KeepAlive</key><true/>'))
-    (LA / f'{NAG_LABEL}.plist').write_text(_plist(NAG_LABEL, [py, str(app / 'room.py'), 'nag'],
-                                                  f'<key>StartCalendarInterval</key><dict><key>Hour</key><integer>{hh}</integer>'
-                                                  f'<key>Minute</key><integer>{mm}</integer></dict>'))
     uid = os.getuid()
-    for label in (SERVER_LABEL, NAG_LABEL):
+    labels = [SERVER_LABEL]
+    if hh is None:
+        subprocess.run(['launchctl', 'bootout', f'gui/{uid}/{NAG_LABEL}'], capture_output=True)
+        (LA / f'{NAG_LABEL}.plist').unlink(missing_ok=True)
+    else:
+        (LA / f'{NAG_LABEL}.plist').write_text(_plist(NAG_LABEL, [py, str(app / 'room.py'), 'nag'],
+                                                      f'<key>StartCalendarInterval</key><dict><key>Hour</key><integer>{hh}</integer>'
+                                                      f'<key>Minute</key><integer>{mm}</integer></dict>'))
+        labels.append(NAG_LABEL)
+    for label in labels:
         subprocess.run(['launchctl', 'bootout', f'gui/{uid}/{label}'], capture_output=True)
         # bootout returns before the old process is gone; bootstrap fails with EIO until it is.
         for attempt in range(10):
@@ -136,7 +145,7 @@ def install(at=None):
     link = SRC / 'Dig Saves.md'
     if not link.is_symlink() and not link.exists():
         link.symlink_to(DATA / 'Dig Saves.md')
-    print(f'Installed. Server on :{PORT}, Keys nag daily at {at}.')
+    print(f'Installed. Server on :{PORT}, Keys nag ' + (f'daily at {at}.' if hh is not None else 'off.'))
     print(f'Phone remote: http://{__import__("tv").mac_ip()}:{PORT}/remote')
 
 

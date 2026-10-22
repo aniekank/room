@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect · Room</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; box-sizing: border-box;
+    background: radial-gradient(ellipse at 70% 10%, #1f2a3a 0%, #0d0b10 65%); color: #f3ede4; font: 16px/1.5 -apple-system, "Helvetica Neue", sans-serif; }
+  main { max-width: 760px; width: 100%; display: flex; flex-wrap: wrap; align-items: center; }
+  .qr { width: 240px; height: 240px; padding: 14px; background: #fff; border-radius: 20px; margin: 0 40px 24px 0; flex: none; }
+  .qr img { width: 100%; height: 100%; display: block; }
+  .text { flex: 1; min-width: 260px; }
+  .kicker { font-size: 12px; letter-spacing: .4em; text-transform: uppercase; color: rgba(243,237,228,.6); }
+  h1 { font-size: 34px; margin: 6px 0 12px; letter-spacing: -0.02em; }
+  p { color: rgba(243,237,228,.75); margin: 0 0 14px; }
+  code { font: 15px Menlo, monospace; color: #f6c26b; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <div class="qr"><img src="/api/remote-qr.svg" alt="QR code for the phone remote"></div>
+  <div class="text">
+    <div class="kicker">Room</div>
+    <h1>Point your phone's camera here</h1>
+    <p>That opens the remote. Then use Share, Add to Home Screen so it's one tap next time. Your phone needs to be on the same Wi-Fi as this Mac.</p>
+    <p>Remote: <code id="remote"></code></p>
+    <p>No Samsung TV? Open <code id="tv"></code> in any TV or tablet browser.</p>
+  </div>
+</main>
+<script>
+fetch('/api/remote').then(function (r) { return r.json(); }).then(function (r) {
+  document.getElementById('remote').textContent = r.url;
+  document.getElementById('tv').textContent = r.tv;
+});
+</script>
+</body>
+</html>

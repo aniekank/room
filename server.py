@@ -4,6 +4,8 @@ The TV page polls /api/poll every second; the phone remote POSTs /api/cmd. That 
 the TV side to plain fetch() so the 2018-19 Tizen browser can run it.
 """
 import json
+import os
+import sys
 import threading
 import time
 from datetime import datetime
@@ -15,9 +17,9 @@ import dig
 import sources
 from paths import DATA
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))  # _MEIPASS: inside Room.app
 WEB = ROOT / 'web'
-PORT = 8788
+PORT = int(os.environ.get('ROOM_PORT', 8788))
 
 _lock = threading.Lock()
 _queue = []          # commands waiting for the TV
@@ -76,6 +78,20 @@ def _export_saves():
     (DATA / 'Dig Saves.md').write_text('\n'.join(lines) + '\n')
 
 
+def qr_svg(text):
+    try:
+        import qrcode
+    except ImportError:
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>'
+    q = qrcode.QRCode(border=2)
+    q.add_data(text)
+    q.make(fit=True)
+    m = q.get_matrix()
+    cells = ''.join(f'M{x},{y}h1v1h-1z' for y, row in enumerate(m) for x, on in enumerate(row) if on)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {len(m)} {len(m)}" shape-rendering="crispEdges">'
+            f'<rect width="100%" height="100%" fill="#fff"/><path d="{cells}" fill="#000"/></svg>')
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=str(WEB), **kw)
@@ -111,7 +127,7 @@ class Handler(SimpleHTTPRequestHandler):
         p = u.path
         if p in ('/', '/tv'):
             self.path = '/index.html'
-        elif p in ('/nag', '/dig', '/window', '/remote'):
+        elif p in ('/nag', '/dig', '/window', '/remote', '/connect'):
             self.path = p + '.html'
         elif p == '/favicon.ico':
             self.send_response(204)
@@ -143,6 +159,18 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(dig.stats())
         elif p == '/api/practice':
             return self._json(practice_summary())
+        elif p == '/api/remote':
+            import tv
+            return self._json({'url': f'http://{tv.mac_ip()}:{PORT}/remote', 'tv': f'http://{tv.mac_ip()}:{PORT}/'})
+        elif p == '/api/remote-qr.svg':
+            import tv
+            body = qr_svg(f'http://{tv.mac_ip()}:{PORT}/remote').encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/svg+xml')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         return super().do_GET()
 
     def do_POST(self):

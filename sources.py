@@ -76,6 +76,12 @@ def _cities():
 
 CITIES, DAY_CITY = _cities()
 
+
+def reload():
+    """Pick up settings changes without a restart."""
+    global CITIES, DAY_CITY
+    CITIES, DAY_CITY = _cities()
+
 # ---------------------------------------------------------------- cache
 
 

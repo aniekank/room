@@ -121,6 +121,12 @@ def _lanes():
 
 LANES = _lanes()
 
+
+def reload():
+    global LANES
+    LANES = _lanes()
+
+
 SKIP_WORDS = ('reaction', 'tutorial', 'lesson', 'how to', 'how i', 'interview', 'thoughts on', 'podcast', 'review', 'shorts',
               'cover', 'karaoke', 'tribute', 'type beat', 'remix', 'explained', 'breakdown', 'sample', 'reacts', 'ai ',
               'livestream', 'live stream', '24/7', 'documentary', 'top 10', 'top 20', 'top 50', 'ranking', 'full movie', 'trailer',

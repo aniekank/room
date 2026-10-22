@@ -1,2 +1,3 @@
 samsungtvws>=3.0
 yt-dlp
+qrcode
