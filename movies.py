@@ -217,8 +217,9 @@ def scan():
             _cache.update(key=key, at=time.time(), files=files)
     seen = _read()
     out, have = [], set()
-    for f in sorted(files, key=lambda f: f['cloud']):  # the same film in two places: keep the copy already on the Mac
-        same = (f['title'].lower(), f['plays'])
+    # The same film twice (two folders, or an MKV and the MP4 made from it): keep one the TV plays, on the Mac if possible.
+    for f in sorted(files, key=lambda f: (not f['plays'], f['cloud'])):
+        same = f['title'].lower()
         if same in have:
             continue
         have.add(same)

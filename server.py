@@ -14,6 +14,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import convert
 import dig
 import movies
 import personal
@@ -224,6 +225,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(movies.scan())
         elif p == '/media':
             return self._media(q.get('id', ''))
+        elif p == '/api/convert':
+            return self._json(convert.status())
         elif p == '/api/station/now':
             return self._json(station.now())
         elif p == '/api/station/yourday':
@@ -310,6 +313,7 @@ def serve(port=PORT, warm=True):
     if warm:
         threading.Thread(target=sources.warm, kwargs={'log': log}, daemon=True).start()
     dig.keep_fresh(log)
+    convert.start(log)  # only when convert_videos is on
     httpd = ThreadingHTTPServer(('0.0.0.0', port), Handler)
     print(f'Room serving on :{port}', flush=True)
     httpd.serve_forever()

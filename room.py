@@ -4,6 +4,7 @@
   room find               find the Samsung TV on the Wi-Fi and remember it
   room pair               one-time "Allow" prompt on the TV
   room show nag|dig|window|movies|station|home   wake the TV and open a channel
+  room convert [status]   make MKV/AVI/MPG files playable now (the server does it in the background when convert_videos is on)
   room station sync       copy the FlyBoyRadio assets from the Desktop into the FlyBoy[TV] kit in iCloud Drive
   room nag                the scheduled nudge: opens Keys unless today's 20 minutes are done
   room install [HH:MM]    install to ~/Library/Application Support/Room + launchd (server + daily nag);
@@ -195,6 +196,12 @@ def main(argv):
         uninstall()
     elif cmd == 'status':
         status()
+    elif cmd == 'convert':
+        import convert
+        if len(argv) > 2 and argv[2] == 'status':
+            print(json.dumps(convert.status(), indent=1))
+        else:
+            convert.run()
     elif cmd == 'station':
         import station
         station.sync()
