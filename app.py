@@ -34,6 +34,7 @@ engine.activate()  # before anything imports yt_dlp
 import rumps  # noqa: E402
 
 import dig  # noqa: E402
+import movies  # noqa: E402
 import room  # noqa: E402
 import settings  # noqa: E402
 import sources  # noqa: E402
@@ -46,7 +47,7 @@ LOGIN_PLIST = room.LA / f'{LABEL}.plist'
 CLI_NAG = room.LA / f'{room.NAG_LABEL}.plist'
 HELP_URL = 'https://github.com/aniekank/room#readme'
 NAG_TIMES = ['07:00', '08:00', '12:00', '17:00', '18:00', '19:00', '19:30', '20:00', '21:00']
-CHANNELS = [('Home', ''), ('Keys', 'nag'), ('Dig Tube', 'dig'), ('World Window', 'window')]
+CHANNELS = [('Home', ''), ('Keys', 'nag'), ('Dig Tube', 'dig'), ('World Window', 'window'), ('Movies', 'movies')]
 
 
 def state():
@@ -103,6 +104,7 @@ class RoomApp(rumps.App):
         self.city_menu = rumps.MenuItem('World Window Cities')
         self.lane_menu = rumps.MenuItem('Dig Tube Lanes')
         self.temp_menu = rumps.MenuItem('Temperature')
+        self.movies_menu = rumps.MenuItem('Movies Folder')
         self.login_item = rumps.MenuItem('Open at Login', callback=self.toggle_login)
         self.engine_item = rumps.MenuItem('Update YouTube Search', callback=self.update_engine)
         on_tv = rumps.MenuItem('Open on TV')
@@ -114,7 +116,7 @@ class RoomApp(rumps.App):
             rumps.MenuItem('Open on This Mac', callback=lambda _: open_url(f'http://127.0.0.1:{PORT}/')),
             rumps.MenuItem('Connect Your Phone…', callback=lambda _: open_url(f'http://127.0.0.1:{PORT}/connect')),
             None,
-            self.nag_menu, self.city_menu, self.lane_menu, self.temp_menu,
+            self.nag_menu, self.city_menu, self.lane_menu, self.temp_menu, self.movies_menu,
             None,
             rumps.MenuItem('Set Up TV…', callback=self.setup_tv),
             self.login_item, self.engine_item,
@@ -269,7 +271,7 @@ class RoomApp(rumps.App):
     # ------------------------------------------------------------ settings menus
 
     def build_settings_menus(self):
-        for m in (self.nag_menu, self.city_menu, self.lane_menu, self.temp_menu):
+        for m in (self.nag_menu, self.city_menu, self.lane_menu, self.temp_menu, self.movies_menu):
             if m._menu is not None:
                 m.clear()
         cur = settings.get('nag_time') or 'off'
@@ -295,6 +297,12 @@ class RoomApp(rumps.App):
         unit = 'C' if str(settings.get('temp_unit')).upper().startswith('C') else 'F'
         self.temp_menu.add(self._check('Fahrenheit (°F)', unit == 'F', lambda _: self.set_setting('temp_unit', 'F')))
         self.temp_menu.add(self._check('Celsius (°C)', unit == 'C', lambda _: self.set_setting('temp_unit', 'C')))
+        self.movies_menu.add(rumps.MenuItem(f'Playing from {movies.label(movies.folder())}'))  # titles are menu keys, so not the bare path
+        self.movies_menu.add(None)
+        self.movies_menu.add(rumps.MenuItem('Choose Folder…', callback=self.choose_movies))
+        self.movies_menu.add(self._check('iCloud Drive/Movies', movies.folder() == movies.DEFAULT,
+                                         lambda _: self.set_setting('movies_folder', None)))
+        self.movies_menu.add(rumps.MenuItem('Show in Finder', callback=lambda _: self.show_movies()))
 
     @staticmethod
     def _check(title, on, cb):
@@ -311,7 +319,7 @@ class RoomApp(rumps.App):
         sources.reload()
         dig.reload()
         self.build_settings_menus()
-        if self.external and key != 'nag_time':
+        if self.external and key not in ('nag_time', 'movies_folder'):  # both are read live
             rumps.alert('Saved', 'Room is running from bin/room, so run "bin/room install" to apply this.')
 
     def set_nag(self, t):
@@ -333,6 +341,22 @@ class RoomApp(rumps.App):
             rumps.alert('That time didn\'t work', 'Use 24-hour time, like 07:45 or 19:30.')
             return
         self.set_nag(t)
+
+    def choose_movies(self, _):
+        start = movies.folder() if movies.folder().is_dir() else movies.ICLOUD
+        r = subprocess.run(['osascript', '-e', f'POSIX path of (choose folder with prompt "Pick the folder with your movies" '
+                            f'default location (POSIX file {json.dumps(str(start))}))'], capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():  # Cancel exits non-zero
+            p = Path(r.stdout.strip())
+            self.set_setting('movies_folder', None if p == movies.DEFAULT else str(p).replace(str(Path.home()), '~', 1))
+
+    def show_movies(self):
+        f = movies.folder()
+        if not f.is_dir():
+            if not rumps.alert('No Movies folder yet', f'Make {movies.label(f)} now?', ok='Make It', cancel='Cancel'):
+                return
+            f.mkdir(parents=True)
+        subprocess.run(['open', str(f)])
 
     def toggle_city(self, cid):
         builtin = [c['id'] for c in sources.BUILTIN_CITIES]

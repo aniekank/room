@@ -7,6 +7,7 @@
   day_city       [7 city ids]     Monday-first weekday rotation (default: cycles through the cities)
   dig_lanes      ["Afrobeat", ...] which built-in Dig Tube lanes to search (default: all)
   extra_lanes    {"Lane": ["search", ...]}  your own Dig Tube lanes
+  movies_folder  "~/Movies"       where the Movies channel looks (default: the Movies folder in iCloud Drive)
 """
 import json
 
@@ -22,6 +23,7 @@ DEFAULTS = {
     'day_city': None,
     'dig_lanes': None,
     'extra_lanes': {},
+    'movies_folder': None,
 }
 
 

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movies · Room</title>
+<link rel="stylesheet" href="/room.css">
+<style>
+  body { background: radial-gradient(ellipse at 20% 0%, #2a1f2e 0%, #0d0b10 60%); }
+  .head h1 { font-size: 4.4vw; font-weight: 800; letter-spacing: -0.03em; margin: 1vh 0 0; }
+  .head .dim { font-size: 1.4vw; }
+  #list { position: absolute; left: 0; right: 0; top: 17vh; bottom: 6vh; overflow: hidden; }
+  .m { padding: 1.5vh 1.6vw; margin-bottom: 0.8vh; border-radius: 0.8vw; border: 0.3vw solid transparent; background: rgba(255,255,255,.04); }
+  .m.sel { border-color: #f6c26b; background: rgba(246,194,107,.12); }
+  .m .t { font-size: 2.2vw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m .s { font-size: 1.3vw; color: rgba(243,237,228,.55); margin-top: .4vh; }
+  .m .s b { color: #f6c26b; font-weight: 600; }
+  .bar { height: .5vh; background: rgba(255,255,255,.12); margin-top: .9vh; border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: #f6c26b; }
+  .empty { font-size: 2vw; line-height: 1.5; max-width: 70vw; color: rgba(243,237,228,.75); }
+  .empty b { color: #f6c26b; }
+  #play { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #000; display: none; }
+  #play.on { display: block; }
+  video { width: 100%; height: 100%; background: #000; }
+  .osd { position: absolute; left: 0; right: 0; bottom: 0; padding: 4vh 4vw 5vh;
+    background: -webkit-linear-gradient(top, rgba(0,0,0,0), rgba(0,0,0,.85)); background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.85));
+    -webkit-transition: opacity .4s; transition: opacity .4s; }
+  .osd.off { opacity: 0; }
+  .osd h2 { font-size: 2.6vw; margin: 0 0 1.5vh; }
+  .osd .bar { height: .8vh; }
+  .osd .row { margin-top: 1.2vh; font-size: 1.5vw; color: rgba(243,237,228,.75); }
+</style>
+</head>
+<body>
+<div class="safe">
+  <div class="head">
+    <div class="kicker">4 · Movies</div>
+    <h1 id="h">Movies</h1>
+    <div class="dim" id="folder"></div>
+  </div>
+  <div id="list"></div>
+</div>
+<div class="hint" id="hint">▲▼ choose · OK play · ◀ ▶ page · 0 menu</div>
+
+<div id="play">
+  <video id="v" preload="auto"></video>
+  <div class="osd off" id="osd">
+    <h2 id="ptitle"></h2>
+    <div class="bar"><i id="pbar" style="width:0"></i></div>
+    <div class="row"><span class="mono" id="ptime"></span><span class="grow"></span><span>OK pause · ◀ 10s · ▶ 30s · ↩ list</span></div>
+  </div>
+</div>
+
+<script src="/room.js"></script>
+<script>
+var list = [], sel = 0, first = 0, ROWS = 7, cur = null, osdT = null, lastSave = 0, waiting = {};
+var v = document.getElementById('v');
+
+function clock(s) {
+  s = Math.floor(s || 0);
+  var h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return (h ? h + ':' + Room.pad(m) : m) + ':' + Room.pad(s % 60);
+}
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+function started(m) { return m.t > 0 && m.duration && m.t < m.duration - 120; }
+
+function load() {
+  return Room.get('/api/movies').then(function (r) {
+    var keep = list[sel] && list[sel].id;
+    list = r.movies;
+    document.getElementById('folder').textContent = r.folder;
+    list.forEach(function (m, i) { if (m.id === keep) sel = i; });
+    sel = Math.min(sel, Math.max(0, list.length - 1));
+    draw(r);
+  });
+}
+
+function draw(r) {
+  var el = document.getElementById('list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty">' + (r && r.missing
+      ? 'There\'s no folder at <b>' + esc(r.folder) + '</b> yet. Make one in iCloud Drive and put movies in it, or pick another folder from the Room menu on the Mac.'
+      : 'No movies in <b>' + esc(r ? r.folder : '') + '</b> yet. MP4, M4V, MOV and WebM files play best.') + '</div>';
+    return;
+  }
+  if (sel < first) first = sel;
+  if (sel >= first + ROWS) first = sel - ROWS + 1;
+  el.innerHTML = list.slice(first, first + ROWS).map(function (m, j) {
+    var i = first + j, bits = [];
+    if (m.dir) bits.push(esc(m.dir));
+    if (m.cloud) bits.push(waiting[m.id] ? '<b>Downloading from iCloud…</b>' : '<b>In iCloud</b> · OK downloads it');
+    else if (started(m)) bits.push('<b>Resume at ' + clock(m.t) + '</b> of ' + clock(m.duration));
+    else if (m.duration && m.t >= m.duration - 120) bits.push('Watched');
+    if (!m.plays) bits.push('The TV may not play this format');
+    return '<div class="m' + (i === sel ? ' sel' : '') + '"><div class="t">' + esc(m.title) + '</div>' +
+      '<div class="s">' + (bits.join(' · ') || '&nbsp;') + '</div>' +
+      (started(m) ? '<div class="bar"><i style="width:' + Math.round(100 * m.t / m.duration) + '%"></i></div>' : '') + '</div>';
+  }).join('');
+  document.getElementById('h').textContent = 'Movies · ' + list.length;
+}
+
+function move(d) { if (!list.length) return; sel = Math.max(0, Math.min(list.length - 1, sel + d)); draw(); }
+
+function choose(id) {
+  var m = null;
+  list.forEach(function (x, i) { if (x.id === id) { m = x; sel = i; } });
+  m = m || list[sel];
+  if (!m) return;
+  if (m.cloud) {
+    waiting[m.id] = true;
+    Room.post('/api/movies/fetch', { id: m.id });
+    Room.toast('Downloading from iCloud. It starts when it\'s here.', 4000);
+    draw();
+    return;
+  }
+  play(m);
+}
+
+function play(m) {
+  cur = m;
+  delete waiting[m.id];
+  document.getElementById('play').className = 'on';
+  document.getElementById('hint').style.display = 'none';
+  document.getElementById('ptitle').textContent = m.title;
+  v.src = '/media?id=' + encodeURIComponent(m.id);
+  var at = started(m) ? m.t - 5 : 0;
+  v.addEventListener('loadedmetadata', function once() {
+    v.removeEventListener('loadedmetadata', once);
+    if (at > 0) v.currentTime = at;
+  });
+  v.play();
+  osd(5000);
+}
+
+function save(force) {
+  if (!cur || !v.duration || isNaN(v.duration)) return;
+  if (!force && Date.now() - lastSave < 10000) return;
+  lastSave = Date.now();
+  cur.t = Math.floor(v.currentTime); cur.duration = Math.floor(v.duration);
+  return Room.post('/api/movies/pos', { id: cur.id, t: cur.t, duration: cur.duration });
+}
+
+function stop() {
+  var saved = save(true);
+  v.pause();
+  v.removeAttribute('src');
+  v.load();
+  cur = null;
+  document.getElementById('play').className = '';
+  document.getElementById('hint').style.display = '';
+  (saved || Promise.resolve()).then(load);  // after the save lands, so the list shows the new spot
+}
+
+function osd(ms) {
+  var el = document.getElementById('osd');
+  el.className = 'osd';
+  clearTimeout(osdT);
+  if (!v.paused) osdT = setTimeout(function () { el.className = 'osd off'; }, ms || 3500);
+}
+
+function seek(by) {
+  if (!v.duration) return;
+  v.currentTime = Math.max(0, Math.min(v.duration - 1, v.currentTime + by));
+  osd();
+}
+
+function toggle() { if (v.paused) v.play(); else { v.pause(); save(true); } osd(); }
+
+v.addEventListener('timeupdate', function () {
+  if (!v.duration) return;
+  document.getElementById('pbar').style.width = (100 * v.currentTime / v.duration) + '%';
+  document.getElementById('ptime').textContent = clock(v.currentTime) + ' / ' + clock(v.duration);
+  save();
+});
+v.addEventListener('ended', function () { save(true); stop(); });
+v.addEventListener('pause', function () { osd(); });
+v.addEventListener('error', function () {
+  if (!cur) return;
+  Room.toast('The TV can\'t play this file. MP4 (H.264) works best.', 5000);
+  cur = null;
+  stop();
+});
+window.addEventListener('beforeunload', function () { save(true); });
+
+function act(k, c) {
+  if (k === 'play' && c && c.id) { if (cur) stop(); choose(c.id); return; }
+  if (cur) {
+    if (k === 'enter' || k === 'play' || k === 'pause' || k === 'playpause') toggle();
+    else if (k === 'left' || k === 'rw') seek(-10);
+    else if (k === 'right' || k === 'ff') seek(30);
+    else if (k === 'seek') seek(c && c.by || 0);
+    else if (k === 'up' || k === 'down' || k === 'info') osd(5000);
+    else if (k === 'back' || k === 'stop' || k === 'list') stop();
+    else return false;
+    return;
+  }
+  if (k === 'down') move(1);
+  else if (k === 'up') move(-1);
+  else if (k === 'right') move(ROWS);
+  else if (k === 'left') move(-ROWS);
+  else if (k === 'enter' || k === 'play' || k === 'playpause') choose();
+  else if (k === 'back') location.href = '/';
+  else return false;
+}
+
+// A movie you asked iCloud for starts by itself once it lands, if you're still waiting on it.
+setInterval(function () {
+  if (cur || !Object.keys(waiting).length) return;
+  load().then(function () {
+    var ready = list.filter(function (m) { return waiting[m.id] && !m.cloud; })[0];
+    if (ready) play(ready);
+  });
+}, 4000);
+
+load();
+Room.keys(function (k) { return act(k); });
+Room.poll(function (c) { act(c.key || c.do, c); });
+Room.report(function () {
+  return { channel: 'movies', title: cur ? cur.title : '', id: cur ? cur.id : '', t: cur ? Math.floor(v.currentTime) : 0,
+           duration: cur && v.duration ? Math.floor(v.duration) : 0, playing: !!cur && !v.paused };
+});
+</script>
+</body>
+</html>

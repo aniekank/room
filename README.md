@@ -1,6 +1,6 @@
 # Room
 
-A Samsung TV as three channels, served from your Mac. Built on a 2018 UN32M4500 (1366×768), so it runs on old Tizen browsers too.
+A Samsung TV as four channels, served from your Mac. Built on a 2018 UN32M4500 (1366×768), so it runs on old Tizen browsers too.
 
 ## Get the app
 
@@ -9,7 +9,7 @@ A Samsung TV as three channels, served from your Mac. Built on a 2018 UN32M4500 
 3. Turn on your Samsung TV, click **Find my TV**, then press **Allow** on the TV when it asks.
 4. Click **Connect Your Phone** in the menu and point your phone's camera at the code. That's the remote.
 
-Everything else is in the menu: open a channel on the TV, set the Keys reminder time, pick the World Window cities and the Dig Tube lanes, switch to °C. Room starts by itself when you log in, and it keeps its YouTube search engine (yt-dlp) up to date on its own.
+Everything else is in the menu: open a channel on the TV, set the Keys reminder time, pick the World Window cities and the Dig Tube lanes, choose your Movies folder, switch to °C. Room starts by itself when you log in, and it keeps its YouTube search engine (yt-dlp) up to date on its own.
 
 **"Room can't be opened" or "Apple could not verify Room":** builds that aren't signed with an Apple Developer ID get this the first time. Open **System Settings → Privacy & Security**, scroll down to the message about Room, click **Open Anyway**, and confirm. You only do this once.
 
@@ -42,7 +42,8 @@ bin/setup          # or: bin/setup 07:45  to pick the Keys nag time
   "cities": ["london", "lagos", "accra"],
   "day_city": ["london", "lagos", "accra", "london", "lagos", "accra", "london"],
   "dig_lanes": ["Afrobeat", "Highlife", "Jazz on TV"],
-  "extra_lanes": {"Italo disco": ["Italo disco 1983 TV", "Italo disco 1985 live"]}
+  "extra_lanes": {"Italo disco": ["Italo disco 1983 TV", "Italo disco 1985 live"]},
+  "movies_folder": "~/Movies"
 }
 ```
 
@@ -55,16 +56,17 @@ Your own cities go in `extra_cities`, shaped like the entries in `sources.py`. L
 | 1 | **Keys** `/nag` | 20-minute keys session. Today's grip (14 daily sets alternating deep house and R&B, jazz to close the cycle) drawn on a 37-key keyboard, Rhodes sound, play-along loop, a new key every 90s. Logs the session and keeps a streak. |
 | 2 | **Dig Tube** `/dig` | Channel-surfs archival clips across 43 lanes (321 searches that walk years and artists, 30 results deep): Soul Train 70s/80s, R&B on TV, quiet storm, neo-soul, go-go, Chicago/Detroit/NYC house, UK acid jazz, Afrobeat, highlife, juju, Ethio-jazz, South Africa, Congo, Jamaica, Brazil, Latin, city pop, Bollywood funk, Anatolian rock, 80s synth pop, prog and krautrock, fusion, library, scores, soft rock, gospel, jazz and hip-hop TV. OK on the TV remote or **Save** on the phone stamps the moment (6s back) into `Dig Saves.md`. |
 | 3 | **World Window** `/window` | A muted street cam or walk from Chicago, Lagos, Detroit, London, Johannesburg or Accra, that city's radio, local time and weather, plus one line on its music history. The city changes by weekday (by default Mon Chicago, Tue Lagos, Wed Detroit, Thu London, Fri Johannesburg, Sat Accra, Sun Chicago). |
+| 4 | **Movies** `/movies` | Your own video files, by default from the **Movies** folder in iCloud Drive (pick another in the menu or with `movies_folder`). Streams from the Mac, so nothing is copied to the TV. Picks up where you stopped. A movie iCloud hasn't downloaded yet says "In iCloud", and OK fetches it and starts it when it lands. MP4 (H.264/AAC) plays best; the TV's browser can't play most MKV or AVI files. |
 
 **Phone remote:** `http://<mac-ip>:8788/remote` (run `room status` for the exact address). Add it to the home screen. It switches channels, has a big Save button, lane and city pickers, and wakes the TV when it's off.
 
-**TV remote:** number keys 1/2/3 jump channels and 0 goes home. ◀ ▶ ▲ ▼ and OK do the obvious thing on each channel, and the hint in the corner lists them.
+**TV remote:** number keys 1/2/3/4 jump channels and 0 goes home. ◀ ▶ ▲ ▼ and OK do the obvious thing on each channel, and the hint in the corner lists them.
 
 ## Commands
 
 ```bash
 bin/room status        # TV, server, nag time
-bin/room show nag      # wake the TV and open a channel (nag|dig|window|home)
+bin/room show nag      # wake the TV and open a channel (nag|dig|window|movies|home)
 bin/room find          # re-find the TV if its IP changes
 bin/room pair          # one-time Allow prompt on the TV
 bin/room install       # (re)install after edits or settings changes

@@ -16,7 +16,7 @@
   .pill { font-size: 13px; padding: 4px 10px; border-radius: 99px; background: var(--card); color: var(--dim); }
   .pill.on { color: #9fe0a8; }
   .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-  .tabs button { flex: 1; padding: 14px 6px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 15px; font-weight: 600; }
+  .tabs button { flex: 1; padding: 14px 4px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 15px; font-weight: 600; }
   .tabs button.on { border-color: var(--gold); color: var(--gold); }
   .card { background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
   .kicker { font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
@@ -41,7 +41,7 @@
 <header><h1>Room</h1><span class="pill" id="online">TV offline</span></header>
 
 <div class="tabs">
-  <button data-ch="nag">Keys</button><button data-ch="dig">Dig</button><button data-ch="window">Window</button><button data-ch="">Home</button>
+  <button data-ch="nag">Keys</button><button data-ch="dig">Dig</button><button data-ch="window">Window</button><button data-ch="movies">Movies</button><button data-ch="">Home</button>
 </div>
 
 <section id="p-off" class="card">
@@ -84,6 +84,19 @@
   </div>
 </section>
 
+<section id="p-movies" class="hide">
+  <div class="card">
+    <div class="kicker">Movies</div>
+    <div class="title" id="movTitle"></div>
+    <div class="dim mono" id="movTime"></div>
+    <div class="grid">
+      <button data-seek="-10">-10s</button><button data-do="playpause">⏯</button><button data-seek="30">+30s</button>
+    </div>
+    <button class="wide" data-do="list">Back to the list</button>
+  </div>
+  <div class="card"><div class="kicker" id="movFolder">Your movies</div><div class="list" id="movList"></div></div>
+</section>
+
 <div class="msg" id="msg"></div>
 
 <script>
@@ -104,6 +117,7 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
 });
 document.querySelectorAll('[data-key]').forEach(b => b.onclick = () => cmd({ key: b.dataset.key }));
 document.querySelectorAll('[data-do]').forEach(b => b.onclick = () => cmd({ do: b.dataset.do }));
+document.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => cmd({ do: 'seek', by: +b.dataset.seek }));
 $('save').onclick = async () => {
   const r = await cmd({ do: 'save' });
   $('digMsg').textContent = r.ok ? 'Saved at ' + fmtT(r.saved.t) + '.' : 'Nothing playing to save.';
@@ -119,6 +133,19 @@ fetch('/api/cities').then(r => r.json()).then(r => {
 });
 
 const fmtT = (t) => Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+const clock = (s) => { s = Math.floor(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+let movieList = 0;
+
+async function loadMovies() {
+  const r = await fetch('/api/movies').then(r => r.json());
+  $('movFolder').textContent = r.folder;
+  $('movList').innerHTML = r.movies.map(m => `<a href="#" data-id="${esc(m.id)}">${esc(m.title)} <span>${
+    m.cloud ? '· in iCloud' : m.t > 0 && m.duration && m.t < m.duration - 120 ? '· resume ' + clock(m.t) : ''}</span></a>`).join('')
+    || '<div class="dim" style="padding-top:8px">No movies in that folder yet.</div>';
+  $('movList').querySelectorAll('a').forEach(a => a.onclick = (e) => { e.preventDefault(); cmd({ do: 'play', id: a.dataset.id }); });
+}
 
 async function refresh() {
   try { state = await fetch('/api/state').then(r => r.json()); } catch (e) { return; }
@@ -126,7 +153,7 @@ async function refresh() {
   $('online').textContent = state.tv_online ? 'TV on · ' + (ch || 'home') : 'TV offline';
   $('online').className = 'pill' + (state.tv_online ? ' on' : '');
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', (b.dataset.ch || 'home') === ch));
-  ['off', 'nag', 'dig', 'window'].forEach(p => $('p-' + p).classList.toggle('hide', p !== (ch && ch !== 'home' ? ch : 'off')));
+  ['off', 'nag', 'dig', 'window', 'movies'].forEach(p => $('p-' + p).classList.toggle('hide', p !== (ch && ch !== 'home' ? ch : 'off')));
   if (ch === 'nag') {
     $('nagSet').textContent = tv.set || '';
     $('nagMeta').textContent = `${tv.chord || ''} · ${Math.floor((tv.elapsed || 0) / 60)} min in · ${state.practice.streak}-day streak`;
@@ -140,6 +167,11 @@ async function refresh() {
     $('winCity').textContent = tv.city ? tv.city[0].toUpperCase() + tv.city.slice(1) : '';
     $('winStation').textContent = tv.station ? (tv.playing ? 'On air: ' : 'Paused: ') + tv.station : '';
     $('cities').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.city === tv.city));
+  }
+  if (ch === 'movies') {
+    $('movTitle').textContent = tv.title || 'Choosing a movie';
+    $('movTime').textContent = tv.duration ? (tv.playing ? '' : 'Paused · ') + clock(tv.t) + ' / ' + clock(tv.duration) : '';
+    if (Date.now() - movieList > 15000) { movieList = Date.now(); loadMovies(); }
   }
   $('saves').innerHTML = state.saves.map(s => `<a href="${s.url}" target="_blank">${s.title} <span>· ${fmtT(s.t)} · ${s.lane}</span></a>`).join('') || '<div class="dim" style="padding-top:8px">Nothing yet. Hit Save when something grabs you.</div>';
 }

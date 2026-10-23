@@ -16,8 +16,8 @@
   .tile:last-child { margin-right: 0; }
   .tile:focus, .tile.sel { border-color: #f6c26b; background: rgba(246,194,107,.12); -webkit-transform: scale(1.03); transform: scale(1.03); }
   .tile .n { font-size: 1.4vw; color: #f6c26b; font-weight: 700; }
-  .tile h2 { font-size: 3.4vw; margin: 1.5vh 0 1vh; }
-  .tile p { font-size: 1.5vw; line-height: 1.35; color: rgba(243,237,228,.7); margin: 0; }
+  .tile h2 { font-size: 2.4vw; margin: 1.5vh 0 1vh; white-space: nowrap; }
+  .tile p { font-size: 1.4vw; line-height: 1.35; color: rgba(243,237,228,.7); margin: 0; }
   .tile .foot { position: absolute; left: 2vw; bottom: 3vh; font-size: 1.4vw; color: rgba(243,237,228,.55); }
   .tile .foot b { color: #f6c26b; }
 </style>
@@ -32,13 +32,14 @@
   <a class="tile" href="/nag" id="t1"><div class="n">1</div><h2>Keys</h2><p>Today's grip, a play-along loop, a new key every 90 seconds. Twenty minutes.</p><div class="foot" id="streak"></div></a>
   <a class="tile" href="/dig" id="t2"><div class="n">2</div><h2>Dig Tube</h2><p>Soul Train, Afrobeat TV, city pop, library records. Hit OK to save the moment.</p><div class="foot" id="saves"></div></a>
   <a class="tile" href="/window" id="t3"><div class="n">3</div><h2>World Window</h2><p>A street, a station and the local time in a city that shaped the music.</p><div class="foot" id="today"></div></a>
+  <a class="tile" href="/movies" id="t4"><div class="n">4</div><h2>Movies</h2><p>Your own films from iCloud Drive, picking up where you left off.</p><div class="foot" id="films"></div></a>
 </div>
 <script src="/room.js"></script>
 <script>
-var tiles = ['t1', 't2', 't3'], sel = 0;
+var tiles = ['t1', 't2', 't3', 't4'], sel = 0;
 function focus() { tiles.forEach(function (id, i) { document.getElementById(id).className = 'tile' + (i === sel ? ' sel' : ''); }); document.getElementById(tiles[sel]).focus(); }
 Room.keys(function (k) {
-  if (k === 'right') { sel = Math.min(2, sel + 1); focus(); }
+  if (k === 'right') { sel = Math.min(tiles.length - 1, sel + 1); focus(); }
   else if (k === 'left') { sel = Math.max(0, sel - 1); focus(); }
   else if (k === 'enter') location.href = document.getElementById(tiles[sel]).getAttribute('href');
   else return false;
@@ -56,6 +57,10 @@ Room.get('/api/state').then(function (s) {
 Room.get('/api/cities').then(function (r) {
   var c = r.cities.filter(function (x) { return x.id === r.today; })[0];
   document.getElementById('today').innerHTML = 'Today: <b>' + (c ? c.name : '') + '</b>';
+});
+Room.get('/api/movies').then(function (r) {
+  var half = r.movies.filter(function (m) { return m.t > 0 && m.duration && m.t < m.duration - 120; }).length;
+  document.getElementById('films').innerHTML = half ? '<b>' + half + '</b> to finish' : r.movies.length ? '<b>' + r.movies.length + '</b> movies' : 'Add some to iCloud Drive';
 });
 focus();
 </script>

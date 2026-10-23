@@ -5,6 +5,7 @@ the TV side to plain fetch() so the 2018-19 Tizen browser can run it.
 """
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -14,6 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import dig
+import movies
 import sources
 from paths import DATA
 
@@ -98,7 +100,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         line = str(args[0]) if args else ''
-        if '/api/poll' not in line and '/api/tv ' not in line and '/api/state' not in line:
+        if '/api/poll' not in line and '/api/tv ' not in line and '/api/state' not in line and '/media' not in line:
             super().log_message(fmt, *args)
 
     def end_headers(self):
@@ -120,6 +122,55 @@ class Handler(SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             return {}
 
+    def _media(self, movie_id):
+        """Streams a movie file with Range support so the TV can seek."""
+        f = movies.path(movie_id)
+        if not f:
+            return self._json({'error': 'not found'}, 404)
+        size = f.stat().st_size
+        start, end = 0, size - 1
+        rng = self.headers.get('Range', '')
+        m = re.match(r'bytes=(\d*)-(\d*)', rng)
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1):
+                start = int(m.group(1))
+                end = min(int(m.group(2)), size - 1) if m.group(2) else size - 1
+            else:  # bytes=-N: the last N bytes
+                start = max(0, size - int(m.group(2)))
+            if start > end:
+                self.send_response(416)
+                self.send_header('Content-Range', f'bytes */{size}')
+                self.end_headers()
+                return
+            self.send_response(206)
+            self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
+        else:
+            self.send_response(200)
+        self.send_header('Content-Type', movies.VIDEO[f.suffix.lower()])
+        self.send_header('Accept-Ranges', 'bytes')
+        self.send_header('Content-Length', str(end - start + 1))
+        self.end_headers()
+        if self.command == 'HEAD':
+            return
+        left = end - start + 1
+        try:
+            with open(f, 'rb') as fh:
+                fh.seek(start)
+                while left > 0:
+                    chunk = fh.read(min(1 << 20, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # the TV seeked or stopped; it'll ask for a new range
+
+    def do_HEAD(self):
+        u = urlparse(self.path)
+        if u.path == '/media':
+            return self._media(parse_qs(u.query).get('id', [''])[0])
+        return super().do_HEAD()
+
     def do_GET(self):
         global _tv_seen
         u = urlparse(self.path)
@@ -127,7 +178,7 @@ class Handler(SimpleHTTPRequestHandler):
         p = u.path
         if p in ('/', '/tv'):
             self.path = '/index.html'
-        elif p in ('/nag', '/dig', '/window', '/remote', '/connect'):
+        elif p in ('/nag', '/dig', '/window', '/movies', '/remote', '/connect'):
             self.path = p + '.html'
         elif p == '/favicon.ico':
             self.send_response(204)
@@ -159,6 +210,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(dig.stats())
         elif p == '/api/practice':
             return self._json(practice_summary())
+        elif p == '/api/movies':
+            return self._json(movies.scan())
+        elif p == '/media':
+            return self._media(q.get('id', ''))
         elif p == '/api/remote':
             import tv
             return self._json({'url': f'http://{tv.mac_ip()}:{PORT}/remote', 'tv': f'http://{tv.mac_ip()}:{PORT}/'})
@@ -207,6 +262,12 @@ class Handler(SimpleHTTPRequestHandler):
                    'minutes': int(body.get('minutes', 0)), 'set': body.get('set', '')}
             _jsonl_append('practice.jsonl', row)
             return self._json(practice_summary())
+        if p == '/api/movies/pos':  # the TV reports where you are
+            if body.get('id') and body.get('duration'):
+                movies.remember(body['id'], body.get('t', 0), body['duration'])
+            return self._json({'ok': True})
+        if p == '/api/movies/fetch':  # download an iCloud placeholder
+            return self._json({'ok': movies.fetch(body.get('id', ''))})
         if p == '/api/dig/bad':  # embed refused; never offer it again
             if body.get('id'):
                 dig.feedback(body['id'], 0, 'error')
