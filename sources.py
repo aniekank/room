@@ -152,7 +152,8 @@ def stations(city):
 
 def _yt_search(query, n=12):
     import yt_dlp
-    with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'skip_download': True, 'noprogress': True}) as ydl:
+    import engine
+    with yt_dlp.YoutubeDL(engine.opts(extract_flat=True, skip_download=True)) as ydl:
         res = ydl.extract_info(f'ytsearch{n}:{query}', download=False)
     return [{'id': e['id'], 'title': e.get('title') or '', 'live': e.get('live_status') == 'is_live',
              'duration': e.get('duration') or 0, 'views': e.get('view_count') or 0}

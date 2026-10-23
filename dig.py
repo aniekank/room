@@ -165,7 +165,8 @@ def _stat(db, lane):
 
 def _search(q, n=30):
     import yt_dlp
-    with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'skip_download': True, 'noprogress': True}) as ydl:
+    import engine
+    with yt_dlp.YoutubeDL(engine.opts(extract_flat=True, skip_download=True)) as ydl:
         res = ydl.extract_info(f'ytsearch{n}:{q}', download=False)
     return res.get('entries') or []
 

@@ -225,6 +225,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(movies.scan())
         elif p == '/media':
             return self._media(q.get('id', ''))
+        elif p == '/api/station/fetch':
+            return self._json(station.fetch_status())
         elif p == '/api/convert':
             return self._json(convert.status())
         elif p == '/api/station/library':

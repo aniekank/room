@@ -52,6 +52,34 @@ def version():
         return '?'
 
 
+def _find(*names):
+    import shutil
+    from pathlib import Path
+    for n in names:
+        p = Path(n).expanduser()
+        if p.is_file():
+            return str(p)
+        w = shutil.which(n)
+        if w:
+            return w
+    return None
+
+
+def opts(**kw):
+    """yt-dlp settings for every call: deno for YouTube's player scripts (without a JS runtime yt-dlp loses formats and
+    breaks sooner), ffmpeg to join video and audio, and a pause between requests so YouTube doesn't flag the Mac.
+    The background server's PATH has neither ~/.deno/bin nor Homebrew, so they're looked up by path."""
+    o = {'quiet': True, 'noprogress': True, 'no_warnings': True, 'sleep_interval_requests': 1}
+    deno = _find('~/.deno/bin/deno', '/opt/homebrew/bin/deno', '/usr/local/bin/deno', 'deno')
+    if deno:
+        o['js_runtimes'] = {'deno': {'path': deno}}
+    ff = _find('/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', 'ffmpeg')
+    if ff:
+        o['ffmpeg_location'] = ff
+    o.update(kw)
+    return o
+
+
 def _get(url, timeout=30):
     with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout) as r:
         return r.read()

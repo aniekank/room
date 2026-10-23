@@ -338,36 +338,39 @@ def _yt(query, embeddable=True):
     return [v for v in vids if v not in bad]
 
 
-TRACKS = DATA / 'tracks'  # songs for the Vault and the Crates, as audio files on the Mac
-TRACKS_CAP = 800e6
+TRACKS = DATA / 'tracks'  # the Vault's and the Crates' songs, as music videos (or audio) on the Mac
+INDEX = TRACKS / 'index.json'  # "artist title" -> file, so a segment can lead with what's already here
+FMT = ('bestvideo[vcodec^=avc1][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]'  # H.264 + AAC: what the TV plays
+       '/bestaudio[ext=m4a]/bestaudio')  # no video to be had: the song at least
+_fetch = {'want': {}, 'until': 0, 'backoff': 900, 'started': False}  # query -> (priority, candidate ids)
+_flock = threading.Lock()
 
 
-def track_audio(vids):
-    """The song's audio, fetched with yt-dlp and played from the Mac. The TV's YouTube player refuses most label
-    uploads (error 150/151 inside an embed on a TV), but a file it plays like any of your beats."""
-    import yt_dlp
-    TRACKS.mkdir(exist_ok=True)
-    for vid in vids:
-        have = list(TRACKS.glob(vid + '.*'))
-        if have:
-            return have[0].name
-        try:
-            with yt_dlp.YoutubeDL({'quiet': True, 'noprogress': True, 'format': 'bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/bestaudio',
-                                   'outtmpl': str(TRACKS / '%(id)s.%(ext)s'), 'max_filesize': 40e6}) as ydl:
-                ydl.download([f'https://www.youtube.com/watch?v={vid}'])
-        except Exception:
-            continue
-        have = [p for p in TRACKS.glob(vid + '.*') if not p.name.endswith('.part')]
-        if have:
-            _prune_tracks()
-            return have[0].name
-    return ''
+def _key(t):
+    return f"{t['artist']} {t['title']}".lower()
+
+
+def _index():
+    try:
+        return json.loads(INDEX.read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def cached(t):
+    """This song's file on the Mac, or ''."""
+    name = _index().get(_key(t), '')
+    return name if name and (TRACKS / name).is_file() else ''
+
+
+def tracks_cap():
+    return 2.5e9 if shutil.disk_usage(HOME).free > 20e9 else 1e9  # more room for videos once the disk has some
 
 
 def _prune_tracks():
-    files = sorted(TRACKS.glob('*'), key=lambda p: p.stat().st_mtime)
-    total = sum(p.stat().st_size for p in files)
-    while files and total > TRACKS_CAP:
+    files = sorted((p for p in TRACKS.glob('*') if p.name != 'index.json'), key=lambda p: p.stat().st_mtime)
+    total, cap = sum(p.stat().st_size for p in files), tracks_cap()
+    while files and total > cap:
         p = files.pop(0)
         total -= p.stat().st_size
         p.unlink(missing_ok=True)
@@ -375,17 +378,104 @@ def _prune_tracks():
 
 def track_path(name):
     p = TRACKS / Path(name).name
-    return p if name and p.is_file() else None
+    return p if name and p.is_file() and p.name != 'index.json' else None
+
+
+class _Pushback(Exception):
+    pass
+
+
+def _download(vid):
+    """One music video at the best quality the TV plays (H.264 up to 1080p with AAC), or its audio if that's all there is."""
+    import engine
+    import yt_dlp
+    TRACKS.mkdir(exist_ok=True)
+    if (TRACKS / f'{vid}.mp4').is_file():
+        return f'{vid}.mp4'
+    extra = {}
+    if settings.get('youtube_cookies_browser'):  # your own YouTube sign-in, if you've turned it on: gets past YouTube's bot check
+        extra['cookiesfrombrowser'] = (settings.get('youtube_cookies_browser'),)
+    try:
+        with yt_dlp.YoutubeDL(engine.opts(format=FMT, merge_output_format='mp4', outtmpl=str(TRACKS / '%(id)s.%(ext)s'),
+                                          max_filesize=150e6, **extra)) as ydl:
+            ydl.download([f'https://www.youtube.com/watch?v={vid}'])
+    except Exception as e:
+        msg = str(e)
+        if '429' in msg or 'not a bot' in msg or 'Too Many Requests' in msg:
+            raise _Pushback(msg)
+        old = TRACKS / f'{vid}.m4a'  # audio from before the videos: better than nothing
+        return old.name if old.is_file() else ''
+    have = [p for p in TRACKS.glob(vid + '.*') if p.suffix in ('.mp4', '.m4a', '.webm')]
+    return have[0].name if have else ''
+
+
+def want(t, priority):
+    """Queue a song for the fetcher. Lower priority numbers go first (what's on now, then what's next)."""
+    if not t.get('all') or cached(t):
+        return
+    with _flock:
+        old = _fetch['want'].get(_key(t))
+        if not old or priority < old[0]:
+            _fetch['want'][_key(t)] = (priority, t['all'])
+        if not _fetch['started']:
+            _fetch['started'] = True
+            threading.Thread(target=_fetcher, daemon=True).start()
+
+
+def _fetcher():
+    """One song at a time, a pause between, and a long break when YouTube pushes back: bursts are what get a Mac flagged."""
+    while True:
+        with _flock:
+            ready = time.time() >= _fetch['until']
+            job = min(_fetch['want'].items(), key=lambda kv: kv[1][0]) if ready and _fetch['want'] else None
+        if not job:
+            time.sleep(5)
+            continue
+        key, (_, vids) = job
+        name = ''
+        try:
+            for vid in vids:
+                name = _download(vid)
+                if name:
+                    break
+            _fetch['backoff'] = 900
+        except _Pushback:
+            with _flock:
+                _fetch['until'] = time.time() + _fetch['backoff']
+                _fetch['backoff'] = min(_fetch['backoff'] * 2, 4 * 3600)
+            continue  # keep it queued for after the break
+        with _flock:
+            _fetch['want'].pop(key, None)
+        if name:
+            with _lock:
+                idx = _index()
+                idx[key] = name
+                INDEX.write_text(json.dumps(idx))
+            _prune_tracks()
+        time.sleep(20)
+
+
+def fetch_status():
+    with _flock:
+        return {'queued': len(_fetch['want']), 'paused_for': max(0, int(_fetch['until'] - time.time())),
+                'on_mac': len(_index())}
 
 
 def resolve(item):
-    """Find a segment's songs on YouTube and bring their audio to the Mac. Runs in the background ahead of airtime."""
+    """Find a segment's songs on YouTube (a search, light on YouTube) and attach any already on the Mac."""
     for t in item.get('tracks') or item.get('records') or []:
-        if not t.get('vids'):
-            t['vids'] = _yt(f"{t['artist']} {t['title']}")
+        if not t.get('all'):
+            t['all'] = _yt(f"{t['artist']} {t['title']}", embeddable=False)
+            bad = blocked()
+            t['vids'] = [v for v in t['all'] if v not in bad]
             t['vid'] = t['vids'][0] if t['vids'] else ''
-        if not t.get('audio'):  # any upload will do for the audio, embeddable or not
-            t['audio'] = track_audio(_yt(f"{t['artist']} {t['title']}", embeddable=False))
+        t['media'] = cached(t)
+
+
+def lead_with_cached(lst):
+    """Songs already on the Mac first, so a segment put on now starts with sound."""
+    lst.sort(key=lambda t: not cached(t))
+    return lst
 
 
 # ---------------------------------------------------------------- library picks
@@ -490,6 +580,7 @@ def pick(kind, st, rng, ref=None):
         if not tracks:
             return None
         rng.shuffle(tracks)
+        tracks = lead_with_cached(tracks[:6])
         return {'kind': 'vault', 'title': f"FlyBoyRadio Vault · {s['label']}", 'date': s['date'], 'label': s['label'],
                 'all': [f"{t['artist']}: {t['title']}" for t in s['tracks']][:24], 'tracks': tracks[:6], 'per': 100,
                 'dur': 100 * min(6, len(tracks))}
@@ -497,8 +588,8 @@ def pick(kind, st, rng, ref=None):
         recs = crates()
         if not recs:
             return None
-        picks = rng.sample(recs, min(3, len(recs)))
-        return {'kind': 'crates', 'title': 'From the Crates', 'records': [dict(r) for r in picks], 'per': 75, 'dur': 75 * len(picks)}
+        picks = lead_with_cached([dict(r) for r in rng.sample(recs, min(3, len(recs)))])
+        return {'kind': 'crates', 'title': 'From the Crates', 'records': picks, 'per': 75, 'dur': 75 * len(picks)}
     if kind == 'yourday':  # one of your beats underneath
         return {'kind': 'yourday', 'title': 'Your Day', 'dur': SEG_LEN['yourday'], 'beats': some_beats(rng, 1)}
     if kind == 'tapes':
@@ -756,18 +847,32 @@ _busy = set()
 
 def _prepare(cur, q):
     """In the background: download what's coming up from iCloud and look up YouTube ids for segments."""
-    for it in [cur] + q[:3]:
+    for pos, it in enumerate([cur] + q[:8]):  # songs eight programs ahead; downloads three
         key = it.get('uid') or id(it)
-        if key in _busy:
+        if it['kind'] in ('vault', 'crates'):
+            lst = it.get('tracks') or it.get('records') or []
+            if any(not t.get('all') for t in lst):
+                if key not in _busy:
+                    _busy.add(key)
+                    threading.Thread(target=_resolve_saved, args=(it, pos), daemon=True).start()
+                continue
+            changed = False
+            for j, t in enumerate(lst):  # pick up songs the fetcher has brought down since
+                m = cached(t)
+                if m != t.get('media'):
+                    t['media'], changed = m, True
+                if not m:
+                    want(t, pos * 10 + j)
+            if changed:
+                _mark(it.get('uid'), **{'tracks' if it.get('tracks') else 'records': lst})
+            continue
+        if key in _busy or pos > 3:
             continue
         if it.get('beats') and not it.get('beats_ready'):  # bring the beats down from iCloud ahead of airtime
             _busy.add(key)
             threading.Thread(target=_fetch_beats, args=(it,), daemon=True).start()
             continue
-        if it['kind'] in ('vault', 'crates') and any(not t.get('audio') for t in it.get('tracks') or it.get('records') or []):
-            _busy.add(key)
-            threading.Thread(target=_resolve_saved, args=(it,), daemon=True).start()
-        elif it['kind'] in ('video', 'recording') and not _item_ready(it) and not it.get('fetched'):
+        if it['kind'] in ('video', 'recording') and not _item_ready(it) and not it.get('fetched'):
             path = HOME / it['id'] if it['kind'] == 'video' else Path(it['path']).expanduser()
             try:
                 need = (_cloud_size({'id': str(path.relative_to(HOME))}) or 3e9) + 2e9
@@ -795,8 +900,11 @@ def _mark(uid, **kw):
         _save(st)
 
 
-def _resolve_saved(item):
+def _resolve_saved(item, pos=0):
     resolve(item)
     key = 'tracks' if item.get('tracks') else 'records'
+    for j, t in enumerate(item.get(key) or []):
+        if not t.get('media'):
+            want(t, pos * 10 + j)
     _mark(item.get('uid'), **{key: item.get(key)})
     _busy.discard(item.get('uid'))

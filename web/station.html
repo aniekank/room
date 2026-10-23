@@ -19,6 +19,9 @@
   #ytbox { position: absolute; display: none; background: #000; }
   #ytbox.on { display: block; }
   #ytbox iframe { width: 100%; height: 100%; border: 0; }
+  #mv { display: none; width: 100%; height: 100%; background: #000; }
+  #ytbox.mv iframe { display: none; }
+  #ytbox.mv #mv { display: block; }
   body.k-vault #ytbox { left: 52vw; top: 27vh; width: 42vw; height: 23.6vw; border-left: .5vw solid #c5221f; }
   body.k-crates #ytbox { left: 66vw; top: 62vh; width: 28vw; height: 15.75vw; }
   body.local .vault .list { top: 27vh; }  /* no video box when the song plays from the Mac */
@@ -133,7 +136,7 @@
 <div id="stage">
   <video id="v" preload="auto"></video>
   <div id="seg"></div>
-  <div id="ytbox"><div id="yt"></div></div>
+  <div id="ytbox"><div id="yt"></div><video id="mv" preload="auto"></video></div>
 </div>
 <div class="lt" id="lt"><span class="tag ab" id="ltTag">Now</span><div class="t ab cream" id="ltTitle"></div><div class="c cn yel" id="ltCredit"></div></div>
 <div class="bug ab"><b>FLYBOY</b>[TV] · <span class="cn" id="clock"></span></div>
@@ -146,7 +149,7 @@
 <script src="/room.js"></script>
 <script>
 var cur = null, nexts = [], t0 = 0, off0 = 0, endT = null, tick = null, slideT = null, kbT = null, player = null, ytReady = false, ytWant = null, ltT = null, step = -1, yd = null;
-var v = document.getElementById('v'), a = document.getElementById('a'), seg = document.getElementById('seg');
+var v = document.getElementById('v'), a = document.getElementById('a'), mv = document.getElementById('mv'), seg = document.getElementById('seg');
 var ART = [];
 for (var i = 1; i <= 10; i++) ART.push('/station/kit/art/flyboyradio-' + (i < 10 ? '0' : '') + i + '.png');
 
@@ -181,6 +184,7 @@ function tune() {
 function stop() {
   v.pause(); v.removeAttribute('src'); v.className = '';
   a.pause(); a.removeAttribute('src');
+  mv.pause(); mv.removeAttribute('src'); mv.loop = false;
   ytStop();
   clearInterval(tick); tick = null; clearInterval(slideT); clearInterval(kbT); step = -1; a.volume = 1; a.loop = false;
   seg.innerHTML = '';
@@ -360,18 +364,20 @@ function tracks(it, list, show) {
     if (i === last) return;
     last = i;
     show(r, i);
-    if (r.audio) {  // the song from the Mac: plays on any TV, embeds or not
+    if (r.media) {  // the song from the Mac, as a music video when there is one: plays on any TV, embeds or not
       ytStop();
-      document.body.className = 'k-' + it.kind + ' local';
-      a.src = '/station/track?f=' + encodeURIComponent(r.audio);
-      a.volume = 1;
-      var from = 30 + Math.floor(e - i * per);
-      a.addEventListener('loadedmetadata', function once() {
-        a.removeEventListener('loadedmetadata', once);
-        if (a.duration) a.currentTime = a.duration > from + 20 ? from : 0;
+      var isVideo = /\.mp4$/.test(r.media), el = isVideo ? mv : a, from = 30 + Math.floor(e - i * per);
+      document.body.className = 'k-' + it.kind + (isVideo ? '' : ' local');
+      $('ytbox').className = isVideo ? 'on mv' : '';
+      (isVideo ? a : mv).pause();
+      el.src = '/station/track?f=' + encodeURIComponent(r.media);
+      el.volume = 1;
+      el.loop = true;  // a short song goes round again rather than leave silence
+      el.addEventListener('loadedmetadata', function once() {
+        el.removeEventListener('loadedmetadata', once);
+        if (el.duration) el.currentTime = el.duration > from + 20 ? from : 0;
       });
-      a.loop = true;  // a short song goes round again rather than leave silence
-      a.play();
+      el.play();
       return;
     }
     r.alt = 0;
@@ -384,12 +390,12 @@ function tracks(it, list, show) {
     };
     if (r.vids && r.vids.length) ytPlay(r.vids[0], 30 + Math.floor(e - i * per), 100);
     else if (r.vid) ytPlay(r.vid, 30 + Math.floor(e - i * per), 100);
-    if (!r.audio && (r.tries = (r.tries || 0) + 1) <= 15) {  // still coming down to the Mac: check back shortly
+    if (!r.media && (r.tries = (r.tries || 0) + 1) <= 40) {  // still coming down to the Mac: check back shortly
       setTimeout(function () {
         Room.get('/api/station/now').then(function (n) {
           if (cur !== it || n.item.uid !== it.uid) return;
           var fresh = n.item.tracks || n.item.records || [];
-          for (var j = 0; j < list.length && j < fresh.length; j++) { list[j].vid = fresh[j].vid; list[j].vids = fresh[j].vids; list[j].audio = fresh[j].audio; }
+          for (var j = 0; j < list.length && j < fresh.length; j++) { list[j].vid = fresh[j].vid; list[j].vids = fresh[j].vids; list[j].media = fresh[j].media; }
           last = -1;
         });
       }, 4000);
@@ -517,6 +523,7 @@ Room.report(function () {
     r.yt = { ready: true, state: player.getPlayerState(), muted: player.isMuted(), volume: player.getVolume(), err: ytErr,
              want: ytWant && ytWant.id, playing: (player.getVideoData() || {}).video_id, box: $('ytbox').className };
   } else r.yt = { ready: false, want: ytWant && ytWant.id, err: ytErr };
+  if (mv.src) r.video = { src: decodeURIComponent(mv.src.split('?f=')[1] || ''), playing: !mv.paused, t: Math.round(mv.currentTime), err: mv.error && mv.error.code };
   if (a.src) r.audio = { src: decodeURIComponent(a.src.split('?f=')[1] || a.src.split('/').pop()), playing: !a.paused, t: Math.round(a.currentTime), err: a.error && a.error.code };
   return r;
 });
