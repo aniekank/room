@@ -87,7 +87,9 @@ def _tv():
     if not host:
         raise RuntimeError('No TV saved yet. Turn the TV on and run: room find')
     # First connection waits on a human pressing Allow on the TV, so give it time.
-    return SamsungTVWS(host=host, port=8002, token_file=str(TOKEN), name='Room', timeout=8 if TOKEN.exists() else 45)
+    # The name Room shows up as on the TV. The token belongs to it, so it's remembered from pairing.
+    return SamsungTVWS(host=host, port=8002, token_file=str(TOKEN), name=cfg.get('remote_name', 'Room'),
+                       timeout=8 if TOKEN.exists() else 45)
 
 
 def wake(mac=None):
@@ -142,7 +144,19 @@ def key(name):
 
 def pair():
     """Trigger the one-time Allow prompt and keep the token."""
-    tv = _tv()
-    tv.open()
+    from samsungtvws.exceptions import UnauthorizedError
+    try:
+        tv = _tv()
+        tv.open()
+    except UnauthorizedError:
+        # Refused with no prompt: the TV remembers an old Deny for this name, even after it's
+        # cleared from Device Connect Manager. A new name gets a fresh prompt.
+        cfg = load_config()
+        n = cfg.get('remote_name', 'Room')
+        cfg['remote_name'] = 'Room TV' if n == 'Room' else 'Room TV ' + str(int(n.split()[-1]) + 1 if n.split()[-1].isdigit() else 2)
+        save_config(cfg)
+        print(f'The TV refused "{n}" without asking. Trying as "{cfg["remote_name"]}": press Allow on the TV.')
+        tv = _tv()
+        tv.open()
     print('Paired. Token saved to', TOKEN)
     tv.close()

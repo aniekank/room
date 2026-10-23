@@ -109,7 +109,7 @@ def install(at=None):
     app = APP / 'app'
     if app.exists():
         shutil.rmtree(app)
-    shutil.copytree(SRC, app, ignore=shutil.ignore_patterns('.venv', '__pycache__', '*.pyc', '.git', 'Dig Saves.md'))
+    shutil.copytree(SRC, app, ignore=shutil.ignore_patterns('.venv', '.build-venv', 'build', 'dist', '__pycache__', '*.pyc', '.git', 'Dig Saves.md'))
     (APP / 'logs').mkdir(exist_ok=True)
     venv = APP / 'venv'
     if not venv.exists():
