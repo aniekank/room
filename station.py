@@ -42,7 +42,7 @@ DAYPARTS = [  # (from hour, name, what airs, weighted)
     (19, 'Prime Time', {'queenpin': 1, 'film': 5, 'series': 1, 'promo': 1}),
     (23, 'Late Night', {'tapes': 2, 'vault': 3, 'recording': 1, 'film': 2, 'queenpin': 1}),
 ]
-LEAD = {'yourday'}  # what opens a daypart before anything else
+LEAD = {'yourday', 'queenpin'}  # what opens a daypart before anything else: Your Day at 6am, Queenpin at 4pm, 7pm and 11pm
 SEG_LEN = {'ident': 7, 'yourday': 80, 'vault': 6 * 100, 'crates': 3 * 75, 'tapes': 3 * 90, 'queenpin': 75}
 BEATS_DEFAULT = movies.ICLOUD / 'TASK Beats Backup 2026-10-03' / 'Desktop'
 BEAT_DIRS = ('Recovered beats*', 'Demo cuts*', 'California Dreamin*')  # plus the finished tracks at the top
@@ -196,19 +196,52 @@ def beats():
     return out
 
 
-def beat_path(rel):
-    """A beat file, downloaded from iCloud first if needed (a few MB each)."""
+BEAT_CACHE = DATA / 'beats'  # on the Mac for good: iCloud can take minutes to hand over a 5 MB file when it's busy
+
+
+def beat_path(rel, wait=0):
+    """A beat on the Mac: from the cache, or copied into it from iCloud Drive. Asks iCloud for it when it isn't down yet,
+    waiting up to `wait` seconds (the TV never waits; the background warm-up does)."""
     root = beats_root().resolve()
     p = (root / rel).resolve()
     if root not in p.parents:
         return None
+    cached = BEAT_CACHE / rel
+    if cached.is_file():
+        return cached
     if not p.exists() and (p.parent / f'.{p.name}.icloud').exists():
         subprocess.run(['brctl', 'download', str(p)], capture_output=True, timeout=10)
-        for _ in range(120):
-            if p.exists():
-                break
-            time.sleep(0.5)
-    return p if p.is_file() else None
+        end = time.time() + wait
+        while not p.exists() and time.time() < end:
+            time.sleep(1)
+    if not p.is_file():
+        return None
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(p, cached)
+    return cached
+
+
+def on_mac(b):
+    return (BEAT_CACHE / b['f']).is_file() or (beats_root() / b['f']).is_file()
+
+
+def some_beats(rng, n):
+    """Beats for a segment, from the ones already on the Mac when there are enough."""
+    ready = [b for b in beats() if on_mac(b)]
+    pool = ready if len(ready) >= n else beats()
+    return rng.sample(pool, min(n, len(pool))) if pool else []
+
+
+def warm_beats(log=print):
+    """In the background: bring every beat down once, a few minutes apart so the converter and the station still get iCloud."""
+    def go():
+        for b in beats():
+            if shutil.disk_usage(HOME).free < 4e9:
+                return
+            if not (BEAT_CACHE / b['f']).is_file() and beat_path(b['f'], wait=600):
+                time.sleep(5)
+        log(f'station: {sum(on_mac(b) for b in beats())} of {len(beats())} beats on the Mac')
+    threading.Thread(target=go, daemon=True).start()
 
 
 def art(folder):
@@ -393,11 +426,11 @@ def pick(kind, st, rng):
         picks = rng.sample(recs, min(3, len(recs)))
         return {'kind': 'crates', 'title': 'From the Crates', 'records': [dict(r) for r in picks], 'per': 75, 'dur': 75 * len(picks)}
     if kind == 'yourday':  # one of your beats underneath
-        return {'kind': 'yourday', 'title': 'Your Day', 'dur': SEG_LEN['yourday'], 'beats': rng.sample(beats(), 1) if beats() else []}
+        return {'kind': 'yourday', 'title': 'Your Day', 'dur': SEG_LEN['yourday'], 'beats': some_beats(rng, 1)}
     if kind == 'tapes':
         if not beats():
             return None
-        picks = rng.sample(beats(), min(3, len(beats())))
+        picks = some_beats(rng, 3)
         slides = art('drive') + art('tapes')
         rng.shuffle(slides)
         return {'kind': 'tapes', 'title': 'Ride With Me · The Tapes', 'show': 'TASK[productions]', 'beats': picks, 'per': 90,
@@ -422,7 +455,7 @@ def pick(kind, st, rng):
                     order.append(by[n].pop())
         slides = [{'img': i, 'name': named(i)} for i in order[:15]]
         return {'kind': 'queenpin', 'title': 'Queenpin: Era One', 'show': 'TASK Enterprises', 'dur': SEG_LEN['queenpin'],
-                'slides': slides, 'beats': rng.sample(beats(), 1) if beats() else []}
+                'slides': slides, 'beats': some_beats(rng, 1)}
     return None
 
 
@@ -574,6 +607,27 @@ def skip():
     return now()
 
 
+ON_DEMAND = ('queenpin', 'tapes', 'vault', 'crates', 'yourday')
+
+
+def play_now(kind):
+    """From the remote: cut to a segment now. What was on ends here; the schedule carries on after it."""
+    if kind not in ON_DEMAND:
+        return None
+    item = pick(kind, _load(), random.Random())
+    if not item:
+        return None
+    with _lock:
+        st = _load()
+        if st.get('current'):
+            _finished(st['current'])
+        item['uid'] = uuid.uuid4().hex[:10]
+        st['current'] = _stamp(item, time.time())
+        _save(st)
+    _prepare(item, [])
+    return now()
+
+
 _busy = set()
 
 
@@ -604,7 +658,7 @@ def _prepare(cur, q):
 
 def _fetch_beats(item):
     for b in item['beats']:
-        beat_path(b['f'])
+        beat_path(b['f'], wait=300)
     _mark(item.get('uid'), beats_ready=True)
     _busy.discard(item.get('uid'))
 

@@ -423,6 +423,7 @@ v.addEventListener('error', function () { if (cur && (cur.kind === 'video' || cu
 function act(k) {
   if (k === 'enter' || k === 'info' || k === 'guide') guide();
   else if (k === 'right' || k === 'ff' || k === 'next' || k === 'skip') next();
+  else if (k === 'retune') { clearTimeout(endT); setTimeout(tune, 600); }  // the phone put something on
   else if (k === 'back') location.href = '/';
   else return false;
 }

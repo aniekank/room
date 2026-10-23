@@ -290,6 +290,12 @@ class Handler(SimpleHTTPRequestHandler):
         if p == '/api/station/dur':
             station.actual_duration(body.get('uid'), body.get('dur'))
             return self._json({'ok': True})
+        if p == '/api/station/play':  # from the phone: put a segment on now, and have the TV retune
+            r = station.play_now(body.get('kind', ''))
+            if r:
+                with _lock:
+                    _queue.append({'do': 'retune'})
+            return self._json({'ok': bool(r)})
         if p == '/api/station/skip':
             return self._json(station.skip())
         if p == '/api/movies/pos':  # the TV reports where you are
@@ -314,6 +320,7 @@ def serve(port=PORT, warm=True):
         threading.Thread(target=sources.warm, kwargs={'log': log}, daemon=True).start()
     dig.keep_fresh(log)
     convert.start(log)  # only when convert_videos is on
+    station.warm_beats(log)
     httpd = ThreadingHTTPServer(('0.0.0.0', port), Handler)
     print(f'Room serving on :{port}', flush=True)
     httpd.serve_forever()
