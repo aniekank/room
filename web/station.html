@@ -21,7 +21,7 @@
   #ytbox iframe { width: 100%; height: 100%; border: 0; }
   body.k-vault #ytbox { left: 52vw; top: 27vh; width: 42vw; height: 23.6vw; border-left: .5vw solid #c5221f; }
   body.k-crates #ytbox { left: 66vw; top: 62vh; width: 28vw; height: 15.75vw; }
-  body.k-yourday #ytbox { left: -2px; top: -2px; width: 1px; height: 1px; }   /* sound only */
+
 
   /* segment cards */
   .card { position: absolute; left: 6vw; right: 6vw; top: 0; bottom: 0; }
@@ -57,6 +57,43 @@
   .yd .steps span { margin-right: 1.6vw; color: rgba(241,238,230,.4); }
   .yd .steps span.on { color: #e9ff42; }
 
+  /* slow-zoom slideshow (Ride With Me, Queenpin) */
+  .kb .bg, .kb .fg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: center/cover no-repeat; }
+  .kb .bg { -webkit-filter: blur(2.5vw) brightness(.55); filter: blur(2.5vw) brightness(.55); -webkit-transform: scale(1.1); transform: scale(1.1); }
+  .kb.tall .fg { background-size: contain; }
+  .kb { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #000; opacity: 0;
+    -webkit-transition: opacity 1.4s; transition: opacity 1.4s; }
+  .kb.on { opacity: 1; -webkit-animation: kb 9s linear both; animation: kb 9s linear both; }
+  .kb.alt.on { -webkit-animation-name: kb2; animation-name: kb2; }
+  @-webkit-keyframes kb { from { -webkit-transform: scale(1.02) translate(0, 0); } to { -webkit-transform: scale(1.14) translate(-2%, -1%); } }
+  @keyframes kb { from { transform: scale(1.02) translate(0, 0); } to { transform: scale(1.14) translate(-2%, -1%); } }
+  @-webkit-keyframes kb2 { from { -webkit-transform: scale(1.14) translate(2%, 1%); } to { -webkit-transform: scale(1.02) translate(0, 0); } }
+  @keyframes kb2 { from { transform: scale(1.14) translate(2%, 1%); } to { transform: scale(1.02) translate(0, 0); } }
+  .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 60vh;
+    background: -webkit-linear-gradient(top, rgba(0,0,0,0), rgba(0,0,0,.85)); background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.85)); }
+
+  /* Ride With Me: the Tapes carousel look */
+  .tape { position: absolute; left: 5vw; bottom: 8vh; right: 30vw; }
+  .tape .lab { font-family: Menlo, "Courier New", monospace; font-size: 1.2vw; letter-spacing: .2em; text-transform: uppercase; color: #e8a33a; }
+  .tape .side { font-family: Georgia, "Times New Roman", serif; font-size: 5vw; line-height: 1.02; color: #f1eee6; margin-top: 1.2vh; }
+  .tape .side em { font-style: normal; color: #e8a33a; }
+  .tape .meta { font-family: Menlo, "Courier New", monospace; font-size: 1.3vw; color: rgba(241,238,230,.7); margin-top: 1.4vh; }
+  .tape .reel { height: .5vh; background: rgba(241,238,230,.15); margin-top: 2vh; width: 40vw; }
+  .tape .reel i { display: block; height: 100%; background: #e8a33a; width: 0; }
+  .tapecard { position: absolute; right: 5vw; bottom: 8vh; width: 20vw; height: 25vw; background: #12151c center/cover no-repeat; box-shadow: 0 1vw 3vw rgba(0,0,0,.6); }
+
+  /* Queenpin: Era One */
+  .qp .name { position: absolute; left: 5vw; bottom: 9vh; }
+  .qp .who { font-family: "Arial Black", Arial, sans-serif; font-weight: 900; font-size: 5.2vw; color: #e7b549; text-transform: uppercase;
+    text-shadow: 0 0 2vw rgba(231,181,73,.35); letter-spacing: .02em; }
+  .qp .crown { display: inline-block; padding: .4vh .8vw; font-size: 1.3vw; letter-spacing: .3em; color: #fff; background: #8e3fff; font-family: Arial, sans-serif; font-weight: 700; }
+  .qp .title { position: absolute; left: 0; right: 0; top: 36vh; text-align: center; }
+  .qp .title .big { font-family: "Helvetica Neue", Arial, sans-serif; font-weight: 300; font-size: 6.5vw; letter-spacing: .25em; color: #e7b549; }
+  .qp .title .sub { font-family: Menlo, monospace; font-size: 1.5vw; letter-spacing: .4em; color: #ff4fb8; margin-top: 2vh; }
+  .qp .bars { position: absolute; left: 4vw; right: 4vw; top: 10vh; height: 1.2vh; }
+  .qp .bars i { position: absolute; top: 0; height: 100%; width: 42%; border: .2vh solid rgba(255,255,255,.4); }
+  .qp .bars i.l { left: 0; background: #e7b549; } .qp .bars i.r { right: 0; background: #ff4fb8; }
+
   /* lower third, as in the promos */
   .lt { position: absolute; left: 3vw; bottom: 6vh; background: rgba(11,11,10,.9); padding: 1.6vh 2vw 1.8vh 2.4vw; max-width: 70vw;
     -webkit-transition: opacity .5s, -webkit-transform .5s; transition: opacity .5s, transform .5s; opacity: 0; -webkit-transform: translateX(-2vw); transform: translateX(-2vw); }
@@ -91,7 +128,7 @@
 
 <script src="/room.js"></script>
 <script>
-var cur = null, nexts = [], t0 = 0, off0 = 0, endT = null, tick = null, slideT = null, player = null, ytReady = false, ytWant = null, ltT = null, step = -1, yd = null;
+var cur = null, nexts = [], t0 = 0, off0 = 0, endT = null, tick = null, slideT = null, kbT = null, player = null, ytReady = false, ytWant = null, ltT = null, step = -1, yd = null;
 var v = document.getElementById('v'), a = document.getElementById('a'), seg = document.getElementById('seg');
 var ART = [];
 for (var i = 1; i <= 10; i++) ART.push('/station/kit/art/flyboyradio-' + (i < 10 ? '0' : '') + i + '.png');
@@ -128,7 +165,7 @@ function stop() {
   v.pause(); v.removeAttribute('src'); v.className = '';
   a.pause(); a.removeAttribute('src');
   ytStop();
-  clearInterval(tick); tick = null; clearInterval(slideT); step = -1;
+  clearInterval(tick); tick = null; clearInterval(slideT); clearInterval(kbT); step = -1; a.volume = 1;
   seg.innerHTML = '';
   $('lt').className = 'lt';
 }
@@ -208,14 +245,93 @@ var SHOW = {
     });
   },
 
+  tapes: function (it) {
+    var cards = it.slides.filter(function (x) { return x.indexOf('/tapes/') > 0; });
+    stage(it.slides.filter(function (x) { return x.indexOf('/tapes/') < 0; }).map(function (x) { return '/station/kit/' + x; }), 9, '30%');
+    seg.insertAdjacentHTML('beforeend', '<div class="shade"></div>' + (cards.length ? '<div class="tapecard" id="tcard"></div>' : '') + '<div class="tape" id="tape"></div>');
+    var last = -1;
+    function at() {
+      var e = elapsed(), i = Math.min(it.beats.length - 1, Math.floor(e / it.per)), b = it.beats[i];
+      $('tape').querySelector && $('tape').querySelector('.reel i') && ($('tape').querySelector('.reel i').style.width = (100 * (e - i * it.per) / it.per) + '%');
+      if (i === last) return;
+      last = i;
+      beat(b, e - i * it.per, 1);
+      if (cards.length) $('tcard').style.backgroundImage = 'url(/station/kit/' + cards[i % cards.length] + ')';
+      $('tape').innerHTML = '<div class="lab">TASKai: Ride with me · tape ' + (i + 1) + ' of ' + it.beats.length + '</div>' +
+        '<div class="side fade">Side ' + 'AB'.charAt(i % 2) + ' · <em>' + esc(b.title) + '</em></div>' +
+        '<div class="meta">' + esc(b.era) + ' · TASK[productions] · motionpage.link/tapes</div><div class="reel"><i></i></div>';
+    }
+    at();
+    tick = setInterval(at, 1000);
+  },
+
+  queenpin: function (it) {
+    var imgs = it.slides.map(function (x) { return '/station/kit/' + x.img; }), per = Math.max(4, (it.dur - 10) / imgs.length);
+    stage(imgs, per, '88%');
+    seg.insertAdjacentHTML('beforeend', '<div class="shade"></div><div class="qp" id="qp"></div>');
+    if (it.beats && it.beats[0]) beat(it.beats[0], elapsed(), 1);
+    var last = -1;
+    function at() {
+      var e = elapsed(), i = Math.floor(e / per), html;
+      if (i === last) return;
+      last = i;
+      if (e >= it.dur - 10) {  // end card
+        html = '<div class="bars"><i class="l"></i><i class="r"></i></div><div class="title fade"><div class="big">QUEENPIN: ERA ONE</div>' +
+          '<div class="sub">THE BUILD LOG · TASK ENTERPRISES</div></div>';
+        $('kbstage').style.opacity = .35;
+      } else {
+        var sl = it.slides[i % it.slides.length];
+        html = '<div class="bars"><i class="l"></i><i class="r"></i></div>' + (sl.name ? '<div class="name fade"><span class="crown">QUEENPIN</span><div class="who">' + esc(sl.name) + '</div></div>' : '');
+      }
+      $('qp').innerHTML = html;
+    }
+    at();
+    tick = setInterval(at, 500);
+  },
+
   yourday: function (it) {
     Room.get('/api/station/yourday').then(function (d) { yd = d; if (cur === it) dayCard(true); });
-    if (it.records && it.records[0] && it.records[0].vid) ytPlay(it.records[0].vid, 40, 22);
-    else if (elapsed() < 5) { a.src = '/station/kit/audio/tag.wav'; a.play(); }
+    if (it.beats && it.beats[0]) beat(it.beats[0], elapsed() + 20, 0.35);
     card('yd', '<div class="head"><span class="tag ab">Your Day</span><div class="mid ab cream" style="margin-top:1.2vh">Tuning in…</div></div>');
     tick = setInterval(function () { dayCard(false); }, 1000);
   }
 };
+
+// slow-zoom slideshow over the whole screen: two layers crossfading, starting where the schedule says we are
+function stage(imgs, per, pos) {  // pos: which side of a wide shot to keep (the passenger sits right, the driver left)
+  seg.innerHTML = '<div id="kbstage" style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden;-webkit-transition:opacity 1s;transition:opacity 1s">' +
+    '<div class="kb" id="kb0"><div class="bg"></div><div class="fg"></div></div><div class="kb alt" id="kb1"><div class="bg"></div><div class="fg"></div></div></div>';
+  var n = Math.floor(elapsed() / per), flip = 0;
+  function go() {
+    var el = $('kb' + flip), other = $('kb' + (1 - flip));
+    if (!el) return;
+    var src = imgs[n++ % imgs.length], img = new Image();
+    flip = 1 - flip;
+    img.onload = img.onerror = function () {
+      // a portrait poster sits whole over a blurred copy of itself; a landscape shot fills the screen
+      el.className = (el.id === 'kb1' ? 'kb alt' : 'kb') + (img.width && img.width / img.height < 1.4 ? ' tall' : '');
+      el.firstChild.style.backgroundImage = el.lastChild.style.backgroundImage = 'url("' + src + '")';
+      el.lastChild.style.backgroundPosition = (pos || 'center') + ' center';
+      void el.offsetWidth;  // restart the zoom
+      el.className += ' on';
+      other.className = other.className.replace(' on', '');
+    };
+    img.src = src;
+  }
+  go();
+  kbT = setInterval(go, per * 1000);
+}
+
+// one of your beats, from the right point in it
+function beat(b, at, vol) {
+  a.src = '/station/beat?f=' + encodeURIComponent(b.f);
+  a.volume = vol == null ? 1 : vol;
+  a.addEventListener('loadedmetadata', function once() {
+    a.removeEventListener('loadedmetadata', once);
+    if (at > 1 && a.duration) a.currentTime = at % a.duration;
+  });
+  a.play();
+}
 
 // a segment that steps through YouTube tracks: which one is on depends on how far into the segment we are
 function tracks(it, list, show) {

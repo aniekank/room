@@ -231,6 +231,8 @@ class Handler(SimpleHTTPRequestHandler):
         elif p.startswith('/station/kit/'):
             from urllib.parse import unquote
             return self._send_file(station.kit_path(unquote(p[len('/station/kit/'):])))
+        elif p == '/station/beat':
+            return self._send_file(station.beat_path(q.get('f', '')))
         elif p == '/station/recording':
             rec = settings.get('station_recording')
             return self._send_file(Path(rec).expanduser() if rec and Path(rec).expanduser().is_file() else None)

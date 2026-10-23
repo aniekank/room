@@ -12,6 +12,7 @@
   station_kit        "~/..."      FlyBoy[TV] kit folder (default: iCloud Drive/FlyBoy[TV]); `room station sync` fills it
   station_source     "~/..."      where sync copies from (default: ~/Desktop/FlyBoyRadio)
   station_recording  "~/....mp3"  the archive FlyBoyRadio recording that airs late at night
+  station_beats      "~/..."      where your beats are (default: the TASK Beats Backup in iCloud Drive)
   notion_token       "secret_..." your Notion integration key, for Your Day
   notion_tasks       "<db id>"    a tasks database: open tasks, soonest due first
   notion_notes       ["<page>"]   pages a study card is drawn from
@@ -39,6 +40,7 @@ DEFAULTS = {
     'station_kit': None,
     'station_source': None,
     'station_recording': None,
+    'station_beats': None,
     'notion_token': None,
     'notion_tasks': None,
     'notion_notes': [],

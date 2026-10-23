@@ -34,16 +34,22 @@ STATE = DATA / 'station.json'
 _lock = threading.Lock()
 
 DAYPARTS = [  # (from hour, name, what airs, weighted)
-    (2, 'Overnight', {'vault': 3, 'crates': 3}),
-    (6, 'Morning', {'yourday': 2, 'series': 5, 'crates': 1}),
-    (10, 'Daytime', {'series': 5, 'crates': 2, 'vault': 1}),
-    (13, 'FlyBoy Academy', {'course': 5, 'crates': 1}),
-    (16, 'Afternoon', {'series': 5, 'vault': 1, 'promo': 1}),
-    (19, 'Prime Time', {'film': 5, 'series': 1, 'promo': 1}),
-    (23, 'Late Night', {'vault': 3, 'recording': 1, 'film': 2}),
+    (2, 'Overnight', {'tapes': 4, 'vault': 2, 'crates': 2}),
+    (6, 'Morning', {'yourday': 2, 'series': 5, 'crates': 1, 'tapes': 1}),
+    (10, 'Daytime', {'series': 5, 'crates': 2, 'vault': 1, 'tapes': 1}),
+    (13, 'FlyBoy Academy', {'course': 5, 'crates': 1, 'tapes': 1}),
+    (16, 'Afternoon', {'series': 5, 'vault': 1, 'promo': 1, 'queenpin': 1}),
+    (19, 'Prime Time', {'queenpin': 1, 'film': 5, 'series': 1, 'promo': 1}),
+    (23, 'Late Night', {'tapes': 2, 'vault': 3, 'recording': 1, 'film': 2, 'queenpin': 1}),
 ]
 LEAD = {'yourday'}  # what opens a daypart before anything else
-SEG_LEN = {'ident': 7, 'yourday': 80, 'vault': 6 * 100, 'crates': 3 * 75}
+SEG_LEN = {'ident': 7, 'yourday': 80, 'vault': 6 * 100, 'crates': 3 * 75, 'tapes': 3 * 90, 'queenpin': 75}
+BEATS_DEFAULT = movies.ICLOUD / 'TASK Beats Backup 2026-10-03' / 'Desktop'
+BEAT_DIRS = ('Recovered beats*', 'Demo cuts*', 'California Dreamin*')  # plus the finished tracks at the top
+BEAT_SKIP = ('*before-after*', '*spot*', '*EXPLICIT*', '*T.A.S.K. tag*', 'she-chose-clean*', 'She Chose - 3%*')
+QUEENPIN = {'lotti-gold': 'Lotti Gold', 'mei-li': 'Mei Li', 'sable': 'Sable · The Architect', 'babi-blu': 'Babi Blu',
+            'champagne': 'Champagne', 'dynasty': 'Dynasty', 'goldie': 'Goldie Knox', 'block_party': 'Butta',
+            'city_spotlight': 'Babi Blu'}
 
 
 def kit():
@@ -84,7 +90,51 @@ def sync(log=print):
         (dst / 'audio').mkdir(parents=True, exist_ok=True)
         shutil.copy2(tag, dst / 'audio/tag.wav')
         n += 1
+    n += _sync_art(dst)
     log(f'kit: {n} files updated in {movies.label(dst)}')
+    return n
+
+
+MOTION = HOME / 'Desktop' / 'Motion'
+ART = {  # kit folder: [(source, name in the kit)]; the Passenger Princess Mode shots are the night versions
+    'drive': [(MOTION / 'Daytime - GPT kit' / f, f.split(' - ')[-1]) for f in
+              ('01 tesla - task-driving.png', '02 tesla - task-autopilot.png', '14 bmw - task-driving-89.png',
+               '01 tesla - task-driving-day.png', '14 bmw - task-driving-89-day.png')] +
+             [(MOTION / f, f) for f in ('alpine.png', 'rollin-cover-no-text.png')],
+    'tapes': [(HOME / 'Desktop' / 'Marketing & Social' / 'Instagram Carousels' / '1 The Tapes' / f'tapes-0{i}.png', f'tapes-0{i}.png') for i in range(1, 9)],
+    'queenpin': [(MOTION / 'Daytime - GPT kit' / f, f.split(' - ')[-1]) for f in
+                 ('06 tesla - lotti-gold.png', '07 tesla - lotti-gold-look.png', '08 tesla - mei-li.png', '09 tesla - mei-li-look.png',
+                  '10 tesla - sable.png', '11 tesla - sable-look.png', '12 tesla - babi-blu.png', '13 tesla - babi-blu-look.png',
+                  '16 bmw - champagne-89.png', '17 bmw - champagne-89-look.png', '18 bmw - dynasty-89.png', '19 bmw - dynasty-89-look.png')] +
+                [(MOTION / 'Queenpin - Passenger Princess Mode - GPT kit' / f, f) for f in
+                 ('01 Lotti Gold - reference.png', '02 Mei Li - reference.png', '03 Sable (The Architect) - reference 2, with her card.png',
+                  '04 Babi Blu - reference.png', '05 Dynasty - reference.png', '06 Champagne - reference.png')] +
+                [(HOME / 'Desktop' / 'Screenshots & Images' / 'queenpin-linkedin-square.png', 'era-one-build-log.png')] +
+                [(movies.ICLOUD / 'Mac Offload' / 'Downloads' / 'Queenpin_Visuals_From_This_Chat' / f, f) for f in
+                 ('goldie_knox_queenpin_of_wealth.png', 'queenpin_of_the_block_party.png',
+                  'queenpin_rise_of_the_crown_fight_night.png', 'queenpin_in_the_city_spotlight.png')],
+}
+
+
+def _sync_art(dst):
+    """Copies the drive, tapes and Queenpin art into the kit as JPEGs sized for the TV (sips ships with macOS)."""
+    n = 0
+    for folder, items in ART.items():
+        for a, name in items:
+            b = dst / 'art' / folder / (Path(name).stem + '.jpg')
+            stub = a.parent / f'.{a.name}.icloud'
+            if not a.exists() and stub.exists():  # still in iCloud: bring it down first
+                subprocess.run(['brctl', 'download', str(a)], capture_output=True)
+                for _ in range(120):
+                    if a.exists():
+                        break
+                    time.sleep(0.5)
+            if not a.exists() or (b.exists() and b.stat().st_mtime >= a.stat().st_mtime):
+                continue
+            b.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(['sips', '-s', 'format', 'jpeg', '-s', 'formatOptions', '82', '-Z', '1400', str(a), '--out', str(b)],
+                           capture_output=True)
+            n += b.exists()
     return n
 
 
@@ -110,6 +160,59 @@ def kit_files(sub, pattern='*'):
     names = {p.name for p in d.glob(pattern) if not p.name.startswith('.')}
     names |= {p.name[1:-7] for p in d.glob('.*.icloud')}
     return sorted(f'{sub}/{n}' for n in names if Path(n).match(pattern))
+
+
+# ---------------------------------------------------------------- your beats
+
+def beats_root():
+    b = settings.get('station_beats')
+    return Path(b).expanduser() if b else BEATS_DEFAULT
+
+
+_beats = None
+
+
+def beats():
+    """Every beat worth airing: the recovered 2009-2011 beats, demo cuts and the finished tracks."""
+    global _beats
+    if _beats is not None:
+        return _beats
+    from fnmatch import fnmatch
+    root, out = beats_root(), []
+    if not root.is_dir():
+        return []
+    for p in root.rglob('*'):
+        name = p.name[1:-7] if p.name.startswith('.') and p.name.endswith('.icloud') else p.name
+        if Path(name).suffix.lower() not in ('.mp3', '.m4a', '.wav') or name.startswith('.'):
+            continue
+        rel = p.parent.relative_to(root) / name
+        top = rel.parts[0] if len(rel.parts) > 1 else ''
+        if len(rel.parts) > 2 or (top and not any(fnmatch(top, d) for d in BEAT_DIRS)) or any(fnmatch(name, x) for x in BEAT_SKIP):
+            continue
+        title = re.sub(r'\s*-\s*\d% faster.*$|\s*\((clean|brightened)\)|-cut$|_Master$|\s*-\s*demo edit.*$', '', Path(name).stem, flags=re.I)
+        era = '2009-2011' if '2009' in top else 'Demo cut' if top.startswith('Demo') else 'TASK[productions]'
+        out.append({'f': rel.as_posix(), 'title': title.replace('_', ' ').strip(), 'era': era})
+    _beats = out
+    return out
+
+
+def beat_path(rel):
+    """A beat file, downloaded from iCloud first if needed (a few MB each)."""
+    root = beats_root().resolve()
+    p = (root / rel).resolve()
+    if root not in p.parents:
+        return None
+    if not p.exists() and (p.parent / f'.{p.name}.icloud').exists():
+        subprocess.run(['brctl', 'download', str(p)], capture_output=True, timeout=10)
+        for _ in range(120):
+            if p.exists():
+                break
+            time.sleep(0.5)
+    return p if p.is_file() else None
+
+
+def art(folder):
+    return kit_files(f'art/{folder}', '*.jpg')
 
 
 # ---------------------------------------------------------------- FlyBoyRadio Vault
@@ -289,9 +392,37 @@ def pick(kind, st, rng):
             return None
         picks = rng.sample(recs, min(3, len(recs)))
         return {'kind': 'crates', 'title': 'From the Crates', 'records': [dict(r) for r in picks], 'per': 75, 'dur': 75 * len(picks)}
-    if kind == 'yourday':  # a record from the crates plays quietly underneath
-        bed = [dict(r) for r in rng.sample(crates(), 1)] if crates() else []
-        return {'kind': 'yourday', 'title': 'Your Day', 'dur': SEG_LEN['yourday'], 'records': bed}
+    if kind == 'yourday':  # one of your beats underneath
+        return {'kind': 'yourday', 'title': 'Your Day', 'dur': SEG_LEN['yourday'], 'beats': rng.sample(beats(), 1) if beats() else []}
+    if kind == 'tapes':
+        if not beats():
+            return None
+        picks = rng.sample(beats(), min(3, len(beats())))
+        slides = art('drive') + art('tapes')
+        rng.shuffle(slides)
+        return {'kind': 'tapes', 'title': 'Ride With Me · The Tapes', 'show': 'TASK[productions]', 'beats': picks, 'per': 90,
+                'dur': 90 * len(picks), 'slides': slides}
+    if kind == 'queenpin':
+        imgs = art('queenpin')
+        if not imgs:
+            return None
+        named = lambda i: next((v for k, v in QUEENPIN.items() if k in i.lower().replace(' ', '-')), '')
+        by = {}
+        for i in imgs:
+            if 'build-log' not in i:
+                by.setdefault(named(i), []).append(i)
+        for v in by.values():
+            rng.shuffle(v)
+        names = list(by)
+        rng.shuffle(names)
+        order = [i for i in imgs if 'build-log' in i]  # opens on the Era One build log
+        while len(order) < 15 and any(by.values()):  # round the cast: nobody twice in a row
+            for n in names:
+                if by[n]:
+                    order.append(by[n].pop())
+        slides = [{'img': i, 'name': named(i)} for i in order[:15]]
+        return {'kind': 'queenpin', 'title': 'Queenpin: Era One', 'show': 'TASK Enterprises', 'dur': SEG_LEN['queenpin'],
+                'slides': slides, 'beats': rng.sample(beats(), 1) if beats() else []}
     return None
 
 
@@ -452,6 +583,10 @@ def _prepare(cur, q):
         key = it.get('uid') or id(it)
         if key in _busy:
             continue
+        if it.get('beats') and not it.get('beats_ready'):  # bring the beats down from iCloud ahead of airtime
+            _busy.add(key)
+            threading.Thread(target=_fetch_beats, args=(it,), daemon=True).start()
+            continue
         if it['kind'] in ('vault', 'crates') and any(not t.get('vid') for t in it.get('tracks') or it.get('records') or []):
             _busy.add(key)
             threading.Thread(target=_resolve_saved, args=(it,), daemon=True).start()
@@ -465,6 +600,13 @@ def _prepare(cur, q):
                 _busy.add(key)
                 subprocess.Popen(['brctl', 'download', str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 _mark(it.get('uid'), fetched=True)
+
+
+def _fetch_beats(item):
+    for b in item['beats']:
+        beat_path(b['f'])
+    _mark(item.get('uid'), beats_ready=True)
+    _busy.discard(item.get('uid'))
 
 
 def _mark(uid, **kw):
