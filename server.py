@@ -26,7 +26,7 @@ from paths import DATA
 ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))  # _MEIPASS: inside Room.app
 WEB = ROOT / 'web'
 PORT = int(os.environ.get('ROOM_PORT', 8788))
-MEDIA = {'.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.png': 'image/png', '.jpg': 'image/jpeg',
+MEDIA = {'.m4a': 'audio/mp4', '.webm': 'audio/webm', '.opus': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.png': 'image/png', '.jpg': 'image/jpeg',
          '.jpeg': 'image/jpeg', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8'}
 
 _lock = threading.Lock()
@@ -236,6 +236,8 @@ class Handler(SimpleHTTPRequestHandler):
         elif p.startswith('/station/kit/'):
             from urllib.parse import unquote
             return self._send_file(station.kit_path(unquote(p[len('/station/kit/'):])))
+        elif p == '/station/track':
+            return self._send_file(station.track_path(q.get('f', '')))
         elif p == '/station/beat':
             return self._send_file(station.beat_path(q.get('f', '')))
         elif p == '/station/recording':
@@ -302,6 +304,10 @@ class Handler(SimpleHTTPRequestHandler):
                 with _lock:
                     _queue.append({'do': 'retune'})
             return self._json(r or {'ok': False})
+        if p == '/api/station/blocked':  # the TV's YouTube player refused this video
+            if body.get('id'):
+                station.block(body['id'])
+            return self._json({'ok': True})
         if p == '/api/station/skip':
             return self._json(station.skip())
         if p == '/api/movies/pos':  # the TV reports where you are

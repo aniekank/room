@@ -21,6 +21,7 @@
   #ytbox iframe { width: 100%; height: 100%; border: 0; }
   body.k-vault #ytbox { left: 52vw; top: 27vh; width: 42vw; height: 23.6vw; border-left: .5vw solid #c5221f; }
   body.k-crates #ytbox { left: 66vw; top: 62vh; width: 28vw; height: 15.75vw; }
+  body.local .vault .list { top: 27vh; }  /* no video box when the song plays from the Mac */
 
 
   /* segment cards */
@@ -181,7 +182,7 @@ function stop() {
   v.pause(); v.removeAttribute('src'); v.className = '';
   a.pause(); a.removeAttribute('src');
   ytStop();
-  clearInterval(tick); tick = null; clearInterval(slideT); clearInterval(kbT); step = -1; a.volume = 1;
+  clearInterval(tick); tick = null; clearInterval(slideT); clearInterval(kbT); step = -1; a.volume = 1; a.loop = false;
   seg.innerHTML = '';
   $('lt').className = 'lt';
 }
@@ -197,7 +198,7 @@ function ytPlay(id, start, volume) {
   player.loadVideoById({ videoId: id, startSeconds: start });
   player.unMute(); player.setVolume(volume == null ? 100 : volume);
 }
-function ytStop() { ytWant = null; $('ytbox').className = ''; if (ytReady) player.stopVideo(); }
+function ytStop() { ytWant = null; ytNext = null; $('ytbox').className = ''; if (ytReady) player.stopVideo(); }
 
 // ------------------------------------------------------------ what each kind looks like
 
@@ -301,6 +302,7 @@ var SHOW = {
 
   yourday: function (it) {
     Room.get('/api/station/yourday').then(function (d) { yd = d; if (cur === it) dayCard(true); });
+    ytNext = null;
     if (it.beats && it.beats[0]) beat(it.beats[0], elapsed() + 20, 0.35);
     card('yd', '<div class="head"><span class="tag ab">Your Day</span><div class="mid ab cream" style="margin-top:1.2vh">Tuning in…</div></div>');
     tick = setInterval(function () { dayCard(false); }, 1000);
@@ -358,14 +360,36 @@ function tracks(it, list, show) {
     if (i === last) return;
     last = i;
     show(r, i);
-    if (r.vid) ytPlay(r.vid, 30 + Math.floor(e - i * per), 100);
-    else {  // still being looked up on YouTube: check back shortly
+    if (r.audio) {  // the song from the Mac: plays on any TV, embeds or not
       ytStop();
+      document.body.className = 'k-' + it.kind + ' local';
+      a.src = '/station/track?f=' + encodeURIComponent(r.audio);
+      a.volume = 1;
+      var from = 30 + Math.floor(e - i * per);
+      a.addEventListener('loadedmetadata', function once() {
+        a.removeEventListener('loadedmetadata', once);
+        if (a.duration) a.currentTime = a.duration > from + 20 ? from : 0;
+      });
+      a.loop = true;  // a short song goes round again rather than leave silence
+      a.play();
+      return;
+    }
+    r.alt = 0;
+    ytNext = function () {  // refused on this TV: on to the next upload of the same song
+      var vids = r.vids || [];
+      Room.post('/api/station/blocked', { id: vids[r.alt] || r.vid });
+      r.alt++;
+      if (vids[r.alt]) ytPlay(vids[r.alt], 30 + Math.floor(elapsed() - i * per), 100);
+      else $('ytbox').className = '';
+    };
+    if (r.vids && r.vids.length) ytPlay(r.vids[0], 30 + Math.floor(e - i * per), 100);
+    else if (r.vid) ytPlay(r.vid, 30 + Math.floor(e - i * per), 100);
+    if (!r.audio && (r.tries = (r.tries || 0) + 1) <= 15) {  // still coming down to the Mac: check back shortly
       setTimeout(function () {
         Room.get('/api/station/now').then(function (n) {
           if (cur !== it || n.item.uid !== it.uid) return;
           var fresh = n.item.tracks || n.item.records || [];
-          for (var j = 0; j < list.length && j < fresh.length; j++) list[j].vid = fresh[j].vid;
+          for (var j = 0; j < list.length && j < fresh.length; j++) { list[j].vid = fresh[j].vid; list[j].vids = fresh[j].vids; list[j].audio = fresh[j].audio; }
           last = -1;
         });
       }, 4000);
@@ -486,9 +510,22 @@ function act(k) {
 }
 Room.keys(function (k) { return act(k); });
 Room.poll(function (c) { act(c.key || c.do); });
-Room.report(function () { return { channel: 'station', title: cur ? cur.title : '', kind: cur ? cur.kind : '', show: cur ? cur.show || '' : '' }; });
+var ytErr = null, ytNext = null;
+Room.report(function () {
+  var r = { channel: 'station', title: cur ? cur.title : '', kind: cur ? cur.kind : '', show: cur ? cur.show || '' : '' };
+  if (ytReady && player.getPlayerState) {  // what the music under a segment is doing, for diagnosing silence
+    r.yt = { ready: true, state: player.getPlayerState(), muted: player.isMuted(), volume: player.getVolume(), err: ytErr,
+             want: ytWant && ytWant.id, playing: (player.getVideoData() || {}).video_id, box: $('ytbox').className };
+  } else r.yt = { ready: false, want: ytWant && ytWant.id, err: ytErr };
+  if (a.src) r.audio = { src: decodeURIComponent(a.src.split('?f=')[1] || a.src.split('/').pop()), playing: !a.paused, t: Math.round(a.currentTime), err: a.error && a.error.code };
+  return r;
+});
 Room.youtube('yt', {}, function (p) { player = p; ytReady = true; if (ytWant) ytPlay(ytWant.id, ytWant.start, ytWant.volume); },
-  null, function () { $('ytbox').className = ''; });  // the uploader blocked embedding: the card stays up without it
+  function (st, p) {
+    if (st === 1) ytErr = null;
+    if (st === 0 && ytWant) { p.seekTo(0); p.playVideo(); }  // a short song ran out before its slot did: go again
+  },
+  function (code) { ytErr = code; if (ytNext) ytNext(); else $('ytbox').className = ''; });  // the uploader blocked embedding: the card stays up without it
 tune();
 </script>
 </body>

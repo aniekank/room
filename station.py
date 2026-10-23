@@ -308,21 +308,84 @@ def crates():
 
 # ---------------------------------------------------------------- YouTube for segments
 
-def _yt(query):
-    def build():
-        hits = [e for e in sources._yt_search(query, 5) if not e['live'] and 60 <= (e['duration'] or 0) <= 1500]
-        return hits[0]['id'] if hits else ''
+BLOCKED = DATA / 'yt_blocked.json'  # videos the TV's player refused (labels often bar embedding on other sites and TVs)
+
+
+def blocked():
     try:
-        return sources.cached('yt:' + query.lower(), 30 * 86400, build)
+        return set(json.loads(BLOCKED.read_text()))
+    except (FileNotFoundError, ValueError):
+        return set()
+
+
+def block(vid):
+    with _lock:
+        b = blocked()
+        b.add(vid)
+        BLOCKED.write_text(json.dumps(sorted(b)))
+
+
+def _yt(query, embeddable=True):
+    """Up to five uploads of a song, best first. The TV works down the list when one is refused."""
+    def build():
+        hits = [e for e in sources._yt_search(query, 10) if not e['live'] and 60 <= (e['duration'] or 0) <= 1500]
+        return [e['id'] for e in hits[:5]]
+    try:
+        vids = sources.cached('yt5:' + query.lower(), 30 * 86400, build)
     except Exception:
-        return ''
+        return []
+    bad = blocked() if embeddable else set()
+    return [v for v in vids if v not in bad]
+
+
+TRACKS = DATA / 'tracks'  # songs for the Vault and the Crates, as audio files on the Mac
+TRACKS_CAP = 800e6
+
+
+def track_audio(vids):
+    """The song's audio, fetched with yt-dlp and played from the Mac. The TV's YouTube player refuses most label
+    uploads (error 150/151 inside an embed on a TV), but a file it plays like any of your beats."""
+    import yt_dlp
+    TRACKS.mkdir(exist_ok=True)
+    for vid in vids:
+        have = list(TRACKS.glob(vid + '.*'))
+        if have:
+            return have[0].name
+        try:
+            with yt_dlp.YoutubeDL({'quiet': True, 'noprogress': True, 'format': 'bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/bestaudio',
+                                   'outtmpl': str(TRACKS / '%(id)s.%(ext)s'), 'max_filesize': 40e6}) as ydl:
+                ydl.download([f'https://www.youtube.com/watch?v={vid}'])
+        except Exception:
+            continue
+        have = [p for p in TRACKS.glob(vid + '.*') if not p.name.endswith('.part')]
+        if have:
+            _prune_tracks()
+            return have[0].name
+    return ''
+
+
+def _prune_tracks():
+    files = sorted(TRACKS.glob('*'), key=lambda p: p.stat().st_mtime)
+    total = sum(p.stat().st_size for p in files)
+    while files and total > TRACKS_CAP:
+        p = files.pop(0)
+        total -= p.stat().st_size
+        p.unlink(missing_ok=True)
+
+
+def track_path(name):
+    p = TRACKS / Path(name).name
+    return p if name and p.is_file() else None
 
 
 def resolve(item):
-    """Find YouTube ids for a segment's tracks or records. Runs in the background ahead of airtime."""
+    """Find a segment's songs on YouTube and bring their audio to the Mac. Runs in the background ahead of airtime."""
     for t in item.get('tracks') or item.get('records') or []:
-        if not t.get('vid'):
-            t['vid'] = _yt(f"{t['artist']} {t['title']}")
+        if not t.get('vids'):
+            t['vids'] = _yt(f"{t['artist']} {t['title']}")
+            t['vid'] = t['vids'][0] if t['vids'] else ''
+        if not t.get('audio'):  # any upload will do for the audio, embeddable or not
+            t['audio'] = track_audio(_yt(f"{t['artist']} {t['title']}", embeddable=False))
 
 
 # ---------------------------------------------------------------- library picks
@@ -701,7 +764,7 @@ def _prepare(cur, q):
             _busy.add(key)
             threading.Thread(target=_fetch_beats, args=(it,), daemon=True).start()
             continue
-        if it['kind'] in ('vault', 'crates') and any(not t.get('vid') for t in it.get('tracks') or it.get('records') or []):
+        if it['kind'] in ('vault', 'crates') and any(not t.get('audio') for t in it.get('tracks') or it.get('records') or []):
             _busy.add(key)
             threading.Thread(target=_resolve_saved, args=(it,), daemon=True).start()
         elif it['kind'] in ('video', 'recording') and not _item_ready(it) and not it.get('fetched'):
