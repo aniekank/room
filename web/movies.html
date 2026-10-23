@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/room.css">
 <style>
   body { background: radial-gradient(ellipse at 20% 0%, #2a1f2e 0%, #0d0b10 60%); }
-  .head h1 { font-size: 4.4vw; font-weight: 800; letter-spacing: -0.03em; margin: 1vh 0 0; }
+  .head h1 { font-size: 4.4vw; font-weight: 800; letter-spacing: -0.03em; margin: 1vh 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .head .dim { font-size: 1.4vw; }
   #list { position: absolute; left: 0; right: 0; top: 17vh; bottom: 6vh; overflow: hidden; }
   .m { padding: 1.5vh 1.6vw; margin-bottom: 0.8vh; border-radius: 0.8vw; border: 0.3vw solid transparent; background: rgba(255,255,255,.04); }
@@ -40,7 +40,7 @@
   </div>
   <div id="list"></div>
 </div>
-<div class="hint" id="hint">▲▼ choose · OK play · ◀ ▶ page · 0 menu</div>
+<div class="hint" id="hint">▲▼ choose · OK play · ◀ ▶ folder · 0 menu</div>
 
 <div id="play">
   <video id="v" preload="auto"></video>
@@ -87,7 +87,6 @@ function draw(r) {
   if (sel >= first + ROWS) first = sel - ROWS + 1;
   el.innerHTML = list.slice(first, first + ROWS).map(function (m, j) {
     var i = first + j, bits = [];
-    if (m.dir) bits.push(esc(m.dir));
     if (m.cloud) bits.push(waiting[m.id] ? '<b>Downloading from iCloud…</b>' : '<b>In iCloud</b> · OK downloads it');
     else if (started(m)) bits.push('<b>Resume at ' + clock(m.t) + '</b> of ' + clock(m.duration));
     else if (m.duration && m.t >= m.duration - 120) bits.push('Watched');
@@ -96,10 +95,27 @@ function draw(r) {
       '<div class="s">' + (bits.join(' · ') || '&nbsp;') + '</div>' +
       (started(m) ? '<div class="bar"><i style="width:' + Math.round(100 * m.t / m.duration) + '%"></i></div>' : '') + '</div>';
   }).join('');
-  document.getElementById('h').textContent = 'Movies · ' + list.length;
+  var g = groupOf(list[sel]), n = list.filter(function (m) { return groupOf(m) === g; }).length;
+  document.getElementById('h').textContent = groupName(list[sel]) + ' · ' + n;
 }
 
 function move(d) { if (!list.length) return; sel = Math.max(0, Math.min(list.length - 1, sel + d)); draw(); }
+
+// ◀ ▶ jump to the start of the previous or next group (Continue, Films, then each series).
+function groupOf(m) { return started(m) ? 'Continue watching' : m.group; }
+function groupName(m) { return started(m) ? 'Continue watching' : m.group_name; }
+function jump(d) {
+  if (!list.length) return;
+  var g = groupOf(list[sel]), i = sel;
+  if (d > 0) { while (i < list.length - 1 && groupOf(list[i]) === g) i++; }
+  else {
+    while (i > 0 && groupOf(list[i - 1]) === g) i--;           // start of this group
+    if (i === sel && i > 0) { i--; g = groupOf(list[i]); while (i > 0 && groupOf(list[i - 1]) === g) i--; }
+  }
+  sel = i; first = i;  // put the group's first title at the top
+  draw();
+  Room.toast(groupName(list[sel]), 1500);
+}
 
 function choose(id) {
   var m = null;
@@ -196,8 +212,8 @@ function act(k, c) {
   }
   if (k === 'down') move(1);
   else if (k === 'up') move(-1);
-  else if (k === 'right') move(ROWS);
-  else if (k === 'left') move(-ROWS);
+  else if (k === 'right') jump(1);
+  else if (k === 'left') jump(-1);
   else if (k === 'enter' || k === 'play' || k === 'playpause') choose();
   else if (k === 'back') location.href = '/';
   else return false;

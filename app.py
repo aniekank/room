@@ -104,7 +104,7 @@ class RoomApp(rumps.App):
         self.city_menu = rumps.MenuItem('World Window Cities')
         self.lane_menu = rumps.MenuItem('Dig Tube Lanes')
         self.temp_menu = rumps.MenuItem('Temperature')
-        self.movies_menu = rumps.MenuItem('Movies Folder')
+        self.movies_menu = rumps.MenuItem('Movies Folders')
         self.login_item = rumps.MenuItem('Open at Login', callback=self.toggle_login)
         self.engine_item = rumps.MenuItem('Update YouTube Search', callback=self.update_engine)
         on_tv = rumps.MenuItem('Open on TV')
@@ -297,12 +297,16 @@ class RoomApp(rumps.App):
         unit = 'C' if str(settings.get('temp_unit')).upper().startswith('C') else 'F'
         self.temp_menu.add(self._check('Fahrenheit (°F)', unit == 'F', lambda _: self.set_setting('temp_unit', 'F')))
         self.temp_menu.add(self._check('Celsius (°C)', unit == 'C', lambda _: self.set_setting('temp_unit', 'C')))
-        self.movies_menu.add(rumps.MenuItem(f'Playing from {movies.label(movies.folder())}'))  # titles are menu keys, so not the bare path
+        for f in movies.folders():  # click one to open it in Finder
+            self.movies_menu.add(rumps.MenuItem(movies.label(f), callback=lambda _, f=f: self.show_movies(f)))
         self.movies_menu.add(None)
-        self.movies_menu.add(rumps.MenuItem('Choose Folder…', callback=self.choose_movies))
-        self.movies_menu.add(self._check('iCloud Drive/Movies', movies.folder() == movies.DEFAULT,
-                                         lambda _: self.set_setting('movies_folder', None)))
-        self.movies_menu.add(rumps.MenuItem('Show in Finder', callback=lambda _: self.show_movies()))
+        self.movies_menu.add(rumps.MenuItem('Add Folder…', callback=self.add_movies))
+        remove = rumps.MenuItem('Remove Folder')
+        for f in movies.folders():
+            remove.add(rumps.MenuItem(f'Remove {movies.label(f)}', callback=lambda _, f=f: self.remove_movies(f)))
+        self.movies_menu.add(remove)
+        if settings.get('movies_skip'):
+            self.movies_menu.add(rumps.MenuItem(f'Skipping {len(settings.get("movies_skip"))} folder names (settings.json)'))
 
     @staticmethod
     def _check(title, on, cb):
@@ -319,7 +323,7 @@ class RoomApp(rumps.App):
         sources.reload()
         dig.reload()
         self.build_settings_menus()
-        if self.external and key not in ('nag_time', 'movies_folder'):  # both are read live
+        if self.external and key not in ('nag_time', 'movies_folders'):  # both are read live
             rumps.alert('Saved', 'Room is running from bin/room, so run "bin/room install" to apply this.')
 
     def set_nag(self, t):
@@ -342,16 +346,24 @@ class RoomApp(rumps.App):
             return
         self.set_nag(t)
 
-    def choose_movies(self, _):
-        start = movies.folder() if movies.folder().is_dir() else movies.ICLOUD
-        r = subprocess.run(['osascript', '-e', f'POSIX path of (choose folder with prompt "Pick the folder with your movies" '
-                            f'default location (POSIX file {json.dumps(str(start))}))'], capture_output=True, text=True)
-        if r.returncode == 0 and r.stdout.strip():  # Cancel exits non-zero
-            p = Path(r.stdout.strip())
-            self.set_setting('movies_folder', None if p == movies.DEFAULT else str(p).replace(str(Path.home()), '~', 1))
+    @staticmethod
+    def _tilde(p):
+        return str(p).replace(str(Path.home()), '~', 1)
 
-    def show_movies(self):
-        f = movies.folder()
+    def add_movies(self, _):
+        r = subprocess.run(['osascript', '-e', 'POSIX path of (choose folder with prompt "Add a folder of movies" '
+                            f'default location (POSIX file {json.dumps(str(movies.ICLOUD))}))'], capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():  # Cancel exits non-zero
+            now = [self._tilde(f) for f in movies.folders()]
+            new = self._tilde(Path(r.stdout.strip().rstrip('/')))
+            if new not in now:
+                self.set_setting('movies_folders', now + [new])
+
+    def remove_movies(self, f):
+        left = [self._tilde(x) for x in movies.folders() if x != f]
+        self.set_setting('movies_folders', left or None)  # none left: back to iCloud Drive/Movies
+
+    def show_movies(self, f):
         if not f.is_dir():
             if not rumps.alert('No Movies folder yet', f'Make {movies.label(f)} now?', ok='Make It', cancel='Cancel'):
                 return

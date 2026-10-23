@@ -7,7 +7,9 @@
   day_city       [7 city ids]     Monday-first weekday rotation (default: cycles through the cities)
   dig_lanes      ["Afrobeat", ...] which built-in Dig Tube lanes to search (default: all)
   extra_lanes    {"Lane": ["search", ...]}  your own Dig Tube lanes
-  movies_folder  "~/Movies"       where the Movies channel looks (default: the Movies folder in iCloud Drive)
+  movies_folders ["~/Movies", ...] where the Movies channel looks, subfolders included (default: iCloud Drive/Movies)
+  movies_skip    ["*Udemy*", ...] folder or file names to leave out, * as a wildcard, any case; a leading / means
+                                  only right inside one of your folders ("/Documents")
 """
 import json
 
@@ -23,7 +25,9 @@ DEFAULTS = {
     'day_city': None,
     'dig_lanes': None,
     'extra_lanes': {},
-    'movies_folder': None,
+    'movies_folder': None,  # older single-folder form, still read
+    'movies_folders': None,
+    'movies_skip': [],
 }
 
 
