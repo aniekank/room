@@ -71,8 +71,9 @@ def opts(**kw):
     The background server's PATH has neither ~/.deno/bin nor Homebrew, so they're looked up by path."""
     o = {'quiet': True, 'noprogress': True, 'no_warnings': True, 'sleep_interval_requests': 1}
     deno = _find('~/.deno/bin/deno', '/opt/homebrew/bin/deno', '/usr/local/bin/deno', 'deno')
-    if deno:
+    if deno:  # and yt-dlp's own challenge-solver scripts, which run on it; without them YouTube offers only thumbnails
         o['js_runtimes'] = {'deno': {'path': deno}}
+        o['remote_components'] = ['ejs:github']
     ff = _find('/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', 'ffmpeg')
     if ff:
         o['ffmpeg_location'] = ff
