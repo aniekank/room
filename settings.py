@@ -8,6 +8,7 @@
   dig_lanes      ["Afrobeat", ...] which built-in Dig Tube lanes to search (default: all)
   extra_lanes    {"Lane": ["search", ...]}  your own Dig Tube lanes
   movies_folders ["~/Movies", ...] where the Movies channel looks, subfolders included (default: iCloud Drive/Movies)
+  movies_courses ["*Hadoop*", ...] top folders that are courses: one group each, lessons in order, after the series
   movies_skip    ["*Udemy*", ...] folder or file names to leave out, * as a wildcard, any case; a leading / means
                                   only right inside one of your folders ("/Documents")
 """
@@ -28,6 +29,7 @@ DEFAULTS = {
     'movies_folder': None,  # older single-folder form, still read
     'movies_folders': None,
     'movies_skip': [],
+    'movies_courses': [],
 }
 
 

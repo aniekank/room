@@ -23,7 +23,7 @@ HOME = Path.home()
 ICLOUD = HOME / 'Library' / 'Mobile Documents' / 'com~apple~CloudDocs'
 DEFAULT = ICLOUD / 'Movies'
 VIDEO = {'.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm',
-         '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo', '.ts': 'video/mp2t', '.mpg': 'video/mpeg',
+         '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo', '.mpg': 'video/mpeg',  # no .ts: mostly TypeScript
          '.mpeg': 'video/mpeg', '.wmv': 'video/x-ms-wmv'}
 PLAYS = {'.mp4', '.m4v', '.mov', '.webm'}  # what the Tizen browser's <video> reliably plays
 BUNDLES = ('.app', '.photoslibrary', '.fcpbundle', '.logicx', '.band', '.imovielibrary', '.component', '.vst', '.vst3')
@@ -73,6 +73,7 @@ def _title(name, parent=''):
     stem = Path(name).stem
     stem = re.sub(r'(?<=\w)[._](?=\w)', ' ', stem).replace('_', ' ')  # Mulholland.Drive.2001 -> Mulholland Drive 2001
     stem = re.sub(r'^www\.\S+\s+-\s+', '', stem).strip()
+    stem = re.sub(r'^(\[[^\]]*\]\s*-\s*|GetFreeCourses\W?Co\W?Udemy\W|Udemy\s*-\s*)', '', stem, flags=re.I).strip()
     # "I7_____540_2026" or "movie": the folder it sits in usually says what it is.
     if parent and (len(re.sub(r'[^A-Za-z]', '', stem)) < 4 or stem.lower() in ('movie', 'video', 'film')):
         return _title(parent + '.mp4')
@@ -90,6 +91,11 @@ def _title(name, parent=''):
     return stem or name
 
 
+def _natural(s):
+    """Lesson 2 before lesson 10."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s)]
+
+
 def _skip(name, patterns, top=False):
     """A pattern starting with / only matches right inside one of your folders: "/Documents" skips
     iCloud Drive/Documents but not a Documents folder deeper down."""
@@ -100,10 +106,17 @@ def _skip(name, patterns, top=False):
                for p in patterns if top or not p.startswith('/'))
 
 
-def _walk(root, patterns):
+def _is_course(name, courses):
+    return any(fnmatch(name.lower(), p.lower()) for p in courses)
+
+
+def _walk(root, patterns, courses):
     out = []
     for dp, dns, fns in os.walk(root):
-        dns[:] = [d for d in dns if not _skip(d, patterns, top=Path(dp) == root)]
+        in_course = any(_is_course(d, courses) for d in Path(dp).relative_to(root).parts)
+        # Inside a course you listed, skip patterns don't apply: it's there because you asked for it.
+        dns[:] = [d for d in dns if not _skip(d, [] if in_course or _is_course(d, courses) else patterns,
+                                                top=Path(dp) == root)]
         for f in fns:
             name, cloud = f, False
             if f.startswith('.') and f.endswith('.icloud'):  # not downloaded yet
@@ -111,7 +124,7 @@ def _walk(root, patterns):
             elif f.startswith('.'):
                 continue
             ext = os.path.splitext(name)[1].lower()
-            if ext not in VIDEO or _skip(name, patterns):
+            if ext not in VIDEO or _skip(name, [] if in_course else patterns):
                 continue
             p = Path(dp) / f
             size = 0
@@ -137,7 +150,8 @@ def scan():
     names = ', '.join(label(r) for r in roots)
     if not any(r.is_dir() for r in roots):
         return {'folder': names, 'missing': True, 'movies': []}
-    key = (tuple(map(str, roots)), tuple(patterns))
+    courses = settings.get('movies_courses') or []
+    key = (tuple(map(str, roots)), tuple(patterns), tuple(courses))
     # A big iCloud Drive takes seconds to walk, so reuse it; look often only while a download is on its way.
     ttl = 3 if time.time() < _cache['fetching_until'] else 60
     with _lock:
@@ -146,7 +160,7 @@ def scan():
         files, ids = [], set()
         for r in roots:
             if r.is_dir():
-                for m in _walk(r, patterns):
+                for m in _walk(r, patterns, courses):
                     if m['id'] not in ids:  # a folder inside another one you also added
                         ids.add(m['id'])
                         files.append(m)
@@ -167,6 +181,11 @@ def scan():
         per_dir[m['dir']] = per_dir.get(m['dir'], 0) + 1
     for m in out:
         last = m['dir'].split('/')[-1]
+        parts = m['dir'].split('/')
+        hit = next((i for i, d in enumerate(parts) if d and _is_course(d, courses)), None)
+        if hit is not None:  # a whole course is one group, in lesson order
+            m['group'], m['group_name'], m['course'] = '/'.join(parts[:hit + 1]), _title(parts[hit] + '.mp4'), True
+            continue
         if per_dir[m['dir']] > 1 and m['dir']:  # a series or a collection: its own group
             name = _title(last + '.mp4')
             parts = m['dir'].split('/')
@@ -184,8 +203,9 @@ def scan():
     started = [m for m in out if 0 < m['t'] < m['duration'] - 120]
     started.sort(key=lambda m: m['watched'], reverse=True)
     rest = [m for m in out if m not in started]
-    order = {'Films': 0, 'Single episodes': 2, 'Other videos': 3}
-    rest.sort(key=lambda m: (order.get(m['group'], 1), m['group_name'].lower(), m['title'].lower()))
+    order = {'Films': 0, 'Single episodes': 3, 'Other videos': 4}
+    rest.sort(key=lambda m: (2 if m.get('course') else order.get(m['group'], 1), m['group_name'].lower(),
+                             _natural(m['id']) if m.get('course') else _natural(m['title'])))
     return {'folder': names, 'missing': False, 'movies': started + rest}
 
 
