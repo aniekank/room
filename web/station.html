@@ -282,27 +282,21 @@ var SHOW = {
   },
 
   queenpin: function (it) {
-    var imgs = it.slides.map(function (x) { return '/station/kit/' + x.img; }), per = Math.max(4, (it.dur - 10) / imgs.length);
-    stage(imgs, per, '88%');
-    seg.insertAdjacentHTML('beforeend', '<div class="shade"></div><div class="qp" id="qp"></div>');
+    var imgs = it.slides.map(function (x) { return '/station/kit/' + x.img; }), per = Math.max(4, (it.dur - 10) / imgs.length), ending = false;
+    var BARS = '<div class="bars"><i class="l"></i><i class="r"></i></div>';
+    stage(imgs, per, '88%', function (i) {  // her name goes up with her picture
+      if (ending) return;
+      var sl = it.slides[i % it.slides.length];
+      $('qp').innerHTML = BARS + (sl.name ? '<div class="name fade"><span class="crown">QUEENPIN</span><div class="who">' + esc(sl.name) + '</div></div>' : '');
+    });
+    seg.insertAdjacentHTML('beforeend', '<div class="shade"></div><div class="qp" id="qp">' + BARS + '</div>');
     if (it.beats && it.beats[0]) beat(it.beats[0], elapsed(), 1);
-    var last = -1;
-    function at() {
-      var e = elapsed(), i = Math.floor(e / per), html;
-      if (i === last) return;
-      last = i;
-      if (e >= it.dur - 10) {  // end card
-        html = '<div class="bars"><i class="l"></i><i class="r"></i></div><div class="title fade"><div class="big">QUEENPIN: ERA ONE</div>' +
-          '<div class="sub">THE BUILD LOG · TASK ENTERPRISES</div></div>';
-        $('kbstage').style.opacity = .35;
-      } else {
-        var sl = it.slides[i % it.slides.length];
-        html = '<div class="bars"><i class="l"></i><i class="r"></i></div>' + (sl.name ? '<div class="name fade"><span class="crown">QUEENPIN</span><div class="who">' + esc(sl.name) + '</div></div>' : '');
-      }
-      $('qp').innerHTML = html;
-    }
-    at();
-    tick = setInterval(at, 500);
+    tick = setInterval(function () {
+      if (ending || elapsed() < it.dur - 10) return;
+      ending = true;  // end card
+      $('qp').innerHTML = BARS + '<div class="title fade"><div class="big">QUEENPIN: ERA ONE</div><div class="sub">THE BUILD LOG · TASK ENTERPRISES</div></div>';
+      $('kbstage').style.opacity = .35;
+    }, 500);
   },
 
   yourday: function (it) {
@@ -314,16 +308,22 @@ var SHOW = {
 };
 
 // slow-zoom slideshow over the whole screen: two layers crossfading, starting where the schedule says we are
-function stage(imgs, per, pos) {  // pos: which side of a wide shot to keep (the passenger sits right, the driver left)
+// Which slide is up comes from the schedule clock, never from a timer of its own, so it can't drift; onShow(i)
+// runs the moment slide i is actually on screen (a name card goes with its picture, not ahead of it).
+function stage(imgs, per, pos, onShow) {  // pos: which side of a wide shot to keep (the passenger sits right, the driver left)
   seg.innerHTML = '<div id="kbstage" style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden;-webkit-transition:opacity 1s;transition:opacity 1s">' +
     '<div class="kb" id="kb0"><div class="bg"></div><div class="fg"></div></div><div class="kb alt" id="kb1"><div class="bg"></div><div class="fg"></div></div></div>';
-  var n = Math.floor(elapsed() / per), flip = 0;
+  var shown = -1, flip = 0;
   function go() {
+    var i = Math.floor(elapsed() / per);
+    if (i === shown) return;
+    shown = i;
     var el = $('kb' + flip), other = $('kb' + (1 - flip));
     if (!el) return;
-    var src = imgs[n++ % imgs.length], img = new Image();
+    var src = imgs[i % imgs.length], img = new Image();
     flip = 1 - flip;
     img.onload = img.onerror = function () {
+      if (shown !== i) return;  // already moved on while this one loaded
       // a portrait poster sits whole over a blurred copy of itself; a landscape shot fills the screen
       el.className = (el.id === 'kb1' ? 'kb alt' : 'kb') + (img.width && img.width / img.height < 1.4 ? ' tall' : '');
       el.firstChild.style.backgroundImage = el.lastChild.style.backgroundImage = 'url("' + src + '")';
@@ -331,11 +331,12 @@ function stage(imgs, per, pos) {  // pos: which side of a wide shot to keep (the
       void el.offsetWidth;  // restart the zoom
       el.className += ' on';
       other.className = other.className.replace(' on', '');
+      if (onShow) onShow(i);
     };
     img.src = src;
   }
   go();
-  kbT = setInterval(go, per * 1000);
+  kbT = setInterval(go, 250);
 }
 
 // one of your beats, from the right point in it

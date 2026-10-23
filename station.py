@@ -48,8 +48,7 @@ BEATS_DEFAULT = movies.ICLOUD / 'TASK Beats Backup 2026-10-03' / 'Desktop'
 BEAT_DIRS = ('Recovered beats*', 'Demo cuts*', 'California Dreamin*')  # plus the finished tracks at the top
 BEAT_SKIP = ('*before-after*', '*spot*', '*EXPLICIT*', '*T.A.S.K. tag*', 'she-chose-clean*', 'She Chose - 3%*')
 QUEENPIN = {'lotti-gold': 'Lotti Gold', 'mei-li': 'Mei Li', 'sable': 'Sable · The Architect', 'babi-blu': 'Babi Blu',
-            'champagne': 'Champagne', 'dynasty': 'Dynasty', 'goldie': 'Goldie Knox', 'block_party': 'Butta',
-            'city_spotlight': 'Babi Blu'}
+            'champagne': 'Champagne', 'dynasty': 'Dynasty', 'goldie': 'Goldie Knox'}  # only names the files themselves give
 
 
 def kit():
