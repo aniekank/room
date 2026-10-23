@@ -227,6 +227,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._media(q.get('id', ''))
         elif p == '/api/convert':
             return self._json(convert.status())
+        elif p == '/api/station/library':
+            return self._json(station.library())
         elif p == '/api/station/now':
             return self._json(station.now())
         elif p == '/api/station/yourday':
@@ -271,6 +273,10 @@ class Handler(SimpleHTTPRequestHandler):
         if p == '/api/tvctl':  # phone asks the Mac to wake the TV and open a channel
             import tv
             ch = body.get('channel', '')
+            if time.time() - _tv_seen < 5:  # a Room page is up: tell it to switch, so no old page stays in front
+                with _lock:
+                    _queue.append({'go': '/' + ch})
+                return self._json({'ok': True, 'was_on': True})
             try:
                 on = tv.ensure_on()
                 tv.open_url(f'http://{tv.mac_ip()}:{PORT}/{ch}')
@@ -291,11 +297,11 @@ class Handler(SimpleHTTPRequestHandler):
             station.actual_duration(body.get('uid'), body.get('dur'))
             return self._json({'ok': True})
         if p == '/api/station/play':  # from the phone: put a segment on now, and have the TV retune
-            r = station.play_now(body.get('kind', ''))
+            r = station.play_now(body.get('kind', ''), body.get('ref'))
             if r:
                 with _lock:
                     _queue.append({'do': 'retune'})
-            return self._json({'ok': bool(r)})
+            return self._json(r or {'ok': False})
         if p == '/api/station/skip':
             return self._json(station.skip())
         if p == '/api/movies/pos':  # the TV reports where you are

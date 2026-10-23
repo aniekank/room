@@ -94,6 +94,20 @@
   .qp .bars i { position: absolute; top: 0; height: 100%; width: 42%; border: .2vh solid rgba(255,255,255,.4); }
   .qp .bars i.l { left: 0; background: #e7b549; } .qp .bars i.r { right: 0; background: #ff4fb8; }
 
+  /* on demand: ▲ */
+  .od { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: #0b0b0a; display: none; }
+  .od.on { display: block; }
+  .od .card { top: 8vh; }
+  .od .tabs { margin: 2.4vh 0 3vh; font-size: 1.7vw; }
+  .od .tabs span { margin-right: 2.6vw; color: rgba(241,238,230,.45); }
+  .od .tabs span.on { color: #0b0b0a; background: #e9ff42; padding: .3vh .6vw; }
+  .od .it { padding: 1vh 0 1vh 1.4vw; border-left: .5vw solid transparent; }
+  .od .it.sel { border-left-color: #c5221f; background: rgba(241,238,230,.06); }
+  .od .it .t { font-size: 2.3vw; color: #f1eee6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .od .it.sel .t { color: #e9ff42; }
+  .od .it .s { font-size: 1.35vw; color: rgba(241,238,230,.55); margin-top: .3vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .od .more { font-size: 1.3vw; color: rgba(241,238,230,.4); margin-top: 1.5vh; }
+
   /* lower third, as in the promos */
   .lt { position: absolute; left: 3vw; bottom: 6vh; background: rgba(11,11,10,.9); padding: 1.6vh 2vw 1.8vh 2.4vw; max-width: 70vw;
     -webkit-transition: opacity .5s, -webkit-transform .5s; transition: opacity .5s, transform .5s; opacity: 0; -webkit-transform: translateX(-2vw); transform: translateX(-2vw); }
@@ -123,8 +137,10 @@
 <div class="lt" id="lt"><span class="tag ab" id="ltTag">Now</span><div class="t ab cream" id="ltTitle"></div><div class="c cn yel" id="ltCredit"></div></div>
 <div class="bug ab"><b>FLYBOY</b>[TV] · <span class="cn" id="clock"></span></div>
 <div class="guide" id="guide"><div class="card"><span class="tag ab">On FlyBoy[TV]</span><div class="mid ab cream" id="gPart" style="margin:1.4vh 0 3vh"></div><div id="gList"></div></div></div>
+<div class="od" id="od"><div class="card"><span class="tag ab">On demand</span><div class="mid ab cream" style="margin-top:1.2vh">Put anything on</div>
+  <div class="tabs ab" id="odTabs"></div><div id="odList"></div><div class="more cn" id="odMore"></div></div></div>
 <audio id="a"></audio>
-<div class="hint">OK guide · ▶ next program · 0 menu</div>
+<div class="hint">OK guide · ▲ on demand · ▶ next program · 0 menu</div>
 
 <script src="/room.js"></script>
 <script>
@@ -420,8 +436,48 @@ setInterval(function () { $('clock').textContent = new Date().toLocaleTimeString
 v.addEventListener('ended', function () { tune(); });
 v.addEventListener('error', function () { if (cur && (cur.kind === 'video' || cur.kind === 'promo')) next(); });
 
+// ------------------------------------------------------------ on demand (▲ on the TV remote)
+
+var OD = [['segments', 'Segments'], ['series', 'Shows'], ['academy', 'Academy'], ['films', 'Films'], ['vault', 'Vault']];
+var od = { open: false, lib: null, col: 0, sel: [0, 0, 0, 0, 0] }, ROWS_OD = 6;
+function odOpen() {
+  od.open = true; $('od').className = 'od on';
+  $('odList').innerHTML = '<div class="it"><div class="t ab">Loading…</div></div>';
+  Room.get('/api/station/library').then(function (L) { od.lib = L; odDraw(); });
+}
+function odClose() { od.open = false; $('od').className = 'od'; }
+function odDraw() {
+  if (!od.lib) return;
+  $('odTabs').innerHTML = OD.map(function (c, i) { return '<span class="' + (i === od.col ? 'on' : '') + '">' + c[1] + '</span>'; }).join('');
+  var list = od.lib[OD[od.col][0]] || [], sel = Math.min(od.sel[od.col], Math.max(0, list.length - 1)), top = Math.max(0, Math.min(sel - 2, list.length - ROWS_OD));
+  od.sel[od.col] = sel;
+  $('odList').innerHTML = list.slice(top, top + ROWS_OD).map(function (x, j) {
+    return '<div class="it' + (top + j === sel ? ' sel' : '') + '"><div class="t ab">' + esc(x.title) + '</div><div class="s cn">' + esc(x.sub || '') + '</div></div>';
+  }).join('') || '<div class="it"><div class="t ab">Nothing here yet</div></div>';
+  $('odMore').textContent = list.length > ROWS_OD ? (sel + 1) + ' of ' + list.length + ' · ◀ ▶ shelves · OK puts it on · ↩ closes' : '◀ ▶ shelves · OK puts it on · ↩ closes';
+}
+function odKey(k) {
+  var list = od.lib ? od.lib[OD[od.col][0]] || [] : [];
+  if (k === 'left') { od.col = (od.col + OD.length - 1) % OD.length; odDraw(); }
+  else if (k === 'right') { od.col = (od.col + 1) % OD.length; odDraw(); }
+  else if (k === 'up') { od.sel[od.col] = Math.max(0, od.sel[od.col] - 1); odDraw(); }
+  else if (k === 'down') { od.sel[od.col] = Math.min(list.length - 1, od.sel[od.col] + 1); odDraw(); }
+  else if (k === 'enter') {
+    var x = list[od.sel[od.col]];
+    if (!x) return;
+    odClose();
+    Room.post('/api/station/play', { kind: x.kind, ref: x.ref }).then(function (r) {
+      if (r && r.waiting) Room.toast(x.title + ' is coming down from iCloud. It starts right after this.', 6000);
+      clearTimeout(endT); tune();
+    });
+  }
+  else if (k === 'back' || k === 'stop') odClose();
+}
+
 function act(k) {
-  if (k === 'enter' || k === 'info' || k === 'guide') guide();
+  if (od.open) return odKey(k);
+  if (k === 'up' || k === 'ondemand') odOpen();
+  else if (k === 'enter' || k === 'info' || k === 'guide') guide();
   else if (k === 'right' || k === 'ff' || k === 'next' || k === 'skip') next();
   else if (k === 'retune') { clearTimeout(endT); setTimeout(tune, 600); }  // the phone put something on
   else if (k === 'back') location.href = '/';

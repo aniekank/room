@@ -48,6 +48,15 @@ def show(channel):
     if not _server_up():
         print('Server is not running. Start it with: room serve  (or room install)')
         return False
+    try:  # a Room page is already up: have it switch, rather than open another page over it
+        st = json.load(urllib.request.urlopen(f'http://127.0.0.1:{PORT}/api/state', timeout=3))
+        if st.get('tv_online'):
+            urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{PORT}/api/cmd', data=json.dumps({'go': '/' + channel}).encode(),
+                                                          headers={'Content-Type': 'application/json'}), timeout=3)
+            print('Switched the TV to', channel or 'home')
+            return True
+    except Exception:
+        pass
     if not tv.ensure_on():
         print('TV did not answer. Is it on the same Wi-Fi as the Mac? Try: room find')
         return False

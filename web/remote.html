@@ -91,11 +91,9 @@
   <div class="grid">
     <button data-do="guide">Guide</button><button data-do="skip">Next ▶</button><button data-ch2="">Home</button>
   </div>
-  <div class="kicker" style="margin-top:16px">Put on now</div>
-  <div class="cities" id="ondemand">
-    <button data-play="queenpin">Queenpin</button><button data-play="tapes">Ride With Me</button><button data-play="vault">FlyBoyRadio Vault</button>
-    <button data-play="crates">From the Crates</button><button data-play="yourday">Your Day</button>
-  </div>
+  <div class="kicker" style="margin-top:16px">On demand</div>
+  <div class="cities" id="odShelves"></div>
+  <div class="list" id="odList" style="margin-top:8px"></div>
 </section>
 
 <section id="p-movies" class="hide">
@@ -131,11 +129,23 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
 });
 document.querySelectorAll('[data-key]').forEach(b => b.onclick = () => cmd({ key: b.dataset.key }));
 document.querySelectorAll('[data-do]').forEach(b => b.onclick = () => cmd({ do: b.dataset.do }));
-document.querySelectorAll('[data-play]').forEach(b => b.onclick = async () => {
+// On demand: the same shelves as ▲ on the TV. Tap anything and it's on.
+const SHELVES = [['segments', 'Segments'], ['series', 'Shows'], ['academy', 'Academy'], ['films', 'Films'], ['vault', 'Vault']];
+let lib = null, shelf = 'segments';
+async function playNow(x) {
   if (!(state && state.tv_online && (state.tv || {}).channel === 'station')) await post('/api/tvctl', { channel: 'station' });
-  const r = await post('/api/station/play', { kind: b.dataset.play });
-  $('msg').textContent = r.ok ? b.textContent + ' is on.' : 'Could not put that on.';
-});
+  const r = await post('/api/station/play', { kind: x.kind, ref: x.ref });
+  $('msg').textContent = !r.ok ? 'Could not put that on.' : r.waiting ? x.title + ' is coming down from iCloud; it starts right after a short segment.' : x.title + ' is on.';
+  if (navigator.vibrate) navigator.vibrate(30);
+}
+function drawShelf() {
+  $('odShelves').innerHTML = SHELVES.map(([k, t]) => `<button data-shelf="${k}" class="${k === shelf ? 'on' : ''}">${t}</button>`).join('');
+  $('odShelves').querySelectorAll('button').forEach(b => b.onclick = () => { shelf = b.dataset.shelf; drawShelf(); });
+  const items = (lib && lib[shelf]) || [];
+  $('odList').innerHTML = items.map((x, i) => `<a href="#" data-i="${i}">${esc(x.title)} <span>· ${esc(x.sub || '')}</span></a>`).join('') || '<div class="dim" style="padding-top:8px">Nothing here yet.</div>';
+  $('odList').querySelectorAll('a').forEach(a => a.onclick = (e) => { e.preventDefault(); playNow(items[+a.dataset.i]); });
+}
+fetch('/api/station/library').then(r => r.json()).then(L => { lib = L; drawShelf(); });
 document.querySelectorAll('[data-ch2]').forEach(b => b.onclick = () => cmd({ go: '/' }));
 document.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => cmd({ do: 'seek', by: +b.dataset.seek }));
 $('save').onclick = async () => {

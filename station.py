@@ -376,17 +376,22 @@ def _shows_of(lib, kind):
     return {k: sorted(v, key=lambda m: movies._natural(m['id'])) for k, v in by.items()}
 
 
-def pick(kind, st, rng):
+def pick(kind, st, rng, ref=None):
+    """A program of this kind. ref picks a particular one: a show or course by name (its next episode), a film by id,
+    a Vault show by date, a promo by file."""
     lib = [m for m in movies.scan()['movies'] if m['plays']]
     aired = st.setdefault('aired', {})
     if kind in ('series', 'course'):
         by = _shows_of(lib, kind)
-        if not by:
+        if not by or (ref and ref not in by):
             return None
         names = sorted(by)
-        rot = st.setdefault('rotation', {})
-        g = names[rot.get(kind, 0) % len(names)]
-        rot[kind] = rot.get(kind, 0) + 1
+        if ref:
+            g = ref
+        else:
+            rot = st.setdefault('rotation', {})
+            g = names[rot.get(kind, 0) % len(names)]
+            rot[kind] = rot.get(kind, 0) + 1
         eps = by[g]
         nxt = st.setdefault('next_ep', {})
         i = nxt.get(g, 0) % len(eps)
@@ -394,6 +399,11 @@ def pick(kind, st, rng):
         return _video(eps[i], st)
     if kind == 'film':
         films = [m for m in lib if m['group'] == 'Films']
+        if ref:
+            m = next((f for f in films if f['id'] == ref), None)
+            if m:
+                aired[m['id']] = time.time()
+            return _video(m, st) if m else None
         fresh = [m for m in films if time.time() - aired.get(m['id'], 0) > 30 * 86400] or films
         if not fresh:
             return None
@@ -403,13 +413,15 @@ def pick(kind, st, rng):
         return _video(m, st)
     if kind == 'promo':
         p = kit_files('promos', '*.mp4')
-        return {'kind': 'promo', 'src': rng.choice(p), 'title': 'FlyBoy[TV] presents', 'dur': 60} if p else None
+        if ref in p:
+            p = [ref]
+        return {'kind': 'promo', 'src': rng.choice(p), 'title': _promo_title(p[0] if ref else ''), 'dur': 60} if p else None
     if kind == 'recording':
         rec = settings.get('station_recording')
         return {'kind': 'recording', 'path': rec, 'title': 'FlyBoyRadio, live on WMUC', 'dur': 3 * 3600,
                 'show': _show_for_recording(rec)} if rec else None
     if kind == 'vault':
-        s = pick_show(rng)
+        s = next((x for x in shows() if x['date'] == ref), None) if ref else pick_show(rng)
         if not s:
             return None
         tracks = [dict(t) for t in s['tracks'] if not t['own']]
@@ -543,7 +555,8 @@ def _advance(st, now):
     nxt = q.pop(0)
     if nxt['kind'] in ('video', 'recording') and not _item_ready(nxt):
         nxt['bumped'] = nxt.get('bumped', 0) + 1
-        if nxt['bumped'] <= 4:
+        if nxt['bumped'] <= (10 if nxt.get('asked') else 4):  # something you asked for gets ~40 minutes to come down
+            nxt['fetched'] = False  # and iCloud gets asked again
             q.insert(0, nxt)  # try again right after the filler
         nxt = pick('crates', st, random.Random()) or {'kind': 'ident', 'title': 'FlyBoy[TV]', 'dur': 7}  # short, while it downloads
     st['current'] = _stamp(nxt, start)
@@ -607,25 +620,73 @@ def skip():
     return now()
 
 
-ON_DEMAND = ('queenpin', 'tapes', 'vault', 'crates', 'yourday')
+ON_DEMAND = ('queenpin', 'tapes', 'vault', 'crates', 'yourday', 'series', 'course', 'film', 'promo', 'recording')
 
 
-def play_now(kind):
-    """From the remote: cut to a segment now. What was on ends here; the schedule carries on after it."""
+def _promo_title(src):
+    name = Path(src).stem.replace('-16x9', '').replace('-', ' ').strip()
+    return name.title() if name else 'FlyBoy[TV] presents'
+
+
+def play_now(kind, ref=None):
+    """From the remote: put anything on now. What was on ends here and the schedule carries on after it.
+    Something still in iCloud starts as soon as it's down; a short Crates segment covers the wait."""
     if kind not in ON_DEMAND:
         return None
-    item = pick(kind, _load(), random.Random())
-    if not item:
-        return None
+    rng, waiting = random.Random(), False
     with _lock:
         st = _load()
+        item = pick(kind, st, rng, ref)
+        if not item:
+            return None
         if st.get('current'):
             _finished(st['current'])
         item['uid'] = uuid.uuid4().hex[:10]
-        st['current'] = _stamp(item, time.time())
+        item['asked'] = True
+        st.setdefault('queue', [])
+        if item['kind'] in ('video', 'recording') and not _item_ready(item):
+            filler = pick('crates', st, rng) or {'kind': 'ident', 'title': 'FlyBoy[TV]', 'dur': 7}
+            filler['uid'] = uuid.uuid4().hex[:10]
+            st['current'] = _stamp(filler, time.time())
+            st['queue'].insert(0, item)
+            waiting = True
+        else:
+            st['current'] = _stamp(item, time.time())
+            _air(st, item)
         _save(st)
-    _prepare(item, [])
-    return now()
+        cur, q = st['current'], st['queue']
+    _prepare(cur, q[:2])
+    return {'ok': True, 'title': item['title'], 'waiting': waiting}
+
+
+def library():
+    """Everything FlyBoy[TV] can put on, for the on-demand menus."""
+    lib = [m for m in movies.scan()['movies'] if m['plays']]
+    nxt = _load().get('next_ep', {})
+
+    def runs(kind):
+        out = []
+        for name, eps in sorted(_shows_of(lib, kind).items()):
+            ep = eps[nxt.get(name, 0) % len(eps)]
+            out.append({'ref': name, 'title': name, 'sub': f"Next: {ep['title']} · {len(eps)} episodes" if kind == 'series'
+                        else f"Next: {ep['title']} · {len(eps)} lessons", 'ready': _ready(ep['id'])})
+        return out
+    films = sorted(({'ref': m['id'], 'title': m['title'], 'ready': _ready(m['id'])} for m in lib if m['group'] == 'Films'),
+                   key=lambda f: f['title'].lower())
+    segs = [('queenpin', 'Queenpin: Era One', 'The cast, cut to one of your beats'),
+            ('tapes', 'Ride With Me', 'Three beats over the night drive'),
+            ('vault', 'FlyBoyRadio Vault', 'A show from this week of the year'),
+            ('crates', 'From the Crates', 'Three records from the digging list'),
+            ('yourday', 'Your Day', 'Calendar, to-dos, notes, Keys and weather'),
+            ('recording', 'FlyBoyRadio, live on WMUC', 'The 6 Feb 2011 show, all three hours')]
+    return {
+        'segments': [{'kind': k, 'title': t, 'sub': d} for k, t, d in segs if k != 'recording' or settings.get('station_recording')] +
+                    [{'kind': 'promo', 'ref': p, 'title': _promo_title(p), 'sub': 'Promo'} for p in kit_files('promos', '*.mp4')],
+        'series': [dict(x, kind='series') for x in runs('series')],
+        'academy': [dict(x, kind='course') for x in runs('course')],
+        'films': [dict(x, kind='film', sub='on the Mac' if x['ready'] else 'in iCloud') for x in films],
+        'vault': [{'kind': 'vault', 'ref': v['date'], 'title': v['label'], 'sub': f"{len(v['tracks'])} tracks"} for v in shows()],
+    }
 
 
 _busy = set()
