@@ -16,12 +16,17 @@ from urllib.parse import parse_qs, urlparse
 
 import dig
 import movies
+import personal
+import settings
 import sources
+import station
 from paths import DATA
 
 ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))  # _MEIPASS: inside Room.app
 WEB = ROOT / 'web'
 PORT = int(os.environ.get('ROOM_PORT', 8788))
+MEDIA = {'.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.png': 'image/png', '.jpg': 'image/jpeg',
+         '.jpeg': 'image/jpeg', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8'}
 
 _lock = threading.Lock()
 _queue = []          # commands waiting for the TV
@@ -123,8 +128,10 @@ class Handler(SimpleHTTPRequestHandler):
             return {}
 
     def _media(self, movie_id):
-        """Streams a movie file with Range support so the TV can seek."""
-        f = movies.path(movie_id)
+        return self._send_file(movies.path(movie_id))
+
+    def _send_file(self, f):
+        """Streams a file with Range support so the TV can seek."""
         if not f:
             return self._json({'error': 'not found'}, 404)
         size = f.stat().st_size
@@ -146,7 +153,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
         else:
             self.send_response(200)
-        self.send_header('Content-Type', movies.VIDEO[f.suffix.lower()])
+        self.send_header('Content-Type', movies.VIDEO.get(f.suffix.lower()) or MEDIA.get(f.suffix.lower(), 'application/octet-stream'))
         self.send_header('Accept-Ranges', 'bytes')
         self.send_header('Content-Length', str(end - start + 1))
         self.end_headers()
@@ -167,6 +174,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_HEAD(self):
         u = urlparse(self.path)
+        if u.path.startswith('/station/kit/'):
+            from urllib.parse import unquote
+            return self._send_file(station.kit_path(unquote(u.path[len('/station/kit/'):])))
         if u.path == '/media':
             return self._media(parse_qs(u.query).get('id', [''])[0])
         return super().do_HEAD()
@@ -178,7 +188,7 @@ class Handler(SimpleHTTPRequestHandler):
         p = u.path
         if p in ('/', '/tv'):
             self.path = '/index.html'
-        elif p in ('/nag', '/dig', '/window', '/movies', '/remote', '/connect'):
+        elif p in ('/nag', '/dig', '/window', '/movies', '/station', '/remote', '/connect'):
             self.path = p + '.html'
         elif p == '/favicon.ico':
             self.send_response(204)
@@ -214,6 +224,16 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(movies.scan())
         elif p == '/media':
             return self._media(q.get('id', ''))
+        elif p == '/api/station/now':
+            return self._json(station.now())
+        elif p == '/api/station/yourday':
+            return self._json(personal.your_day())
+        elif p.startswith('/station/kit/'):
+            from urllib.parse import unquote
+            return self._send_file(station.kit_path(unquote(p[len('/station/kit/'):])))
+        elif p == '/station/recording':
+            rec = settings.get('station_recording')
+            return self._send_file(Path(rec).expanduser() if rec and Path(rec).expanduser().is_file() else None)
         elif p == '/api/remote':
             import tv
             return self._json({'url': f'http://{tv.mac_ip()}:{PORT}/remote', 'tv': f'http://{tv.mac_ip()}:{PORT}/'})
@@ -262,6 +282,11 @@ class Handler(SimpleHTTPRequestHandler):
                    'minutes': int(body.get('minutes', 0)), 'set': body.get('set', '')}
             _jsonl_append('practice.jsonl', row)
             return self._json(practice_summary())
+        if p == '/api/station/dur':
+            station.actual_duration(body.get('uid'), body.get('dur'))
+            return self._json({'ok': True})
+        if p == '/api/station/skip':
+            return self._json(station.skip())
         if p == '/api/movies/pos':  # the TV reports where you are
             if body.get('id') and body.get('duration'):
                 movies.remember(body['id'], body.get('t', 0), body['duration'])

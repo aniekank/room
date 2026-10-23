@@ -41,7 +41,7 @@
 <header><h1>Room</h1><span class="pill" id="online">TV offline</span></header>
 
 <div class="tabs">
-  <button data-ch="nag">Keys</button><button data-ch="dig">Dig</button><button data-ch="window">Window</button><button data-ch="movies">Movies</button><button data-ch="">Home</button>
+  <button data-ch="nag">Keys</button><button data-ch="dig">Dig</button><button data-ch="window">Window</button><button data-ch="station">TV</button><button data-ch="movies">Movies</button><button data-ch="">Home</button>
 </div>
 
 <section id="p-off" class="card">
@@ -84,6 +84,15 @@
   </div>
 </section>
 
+<section id="p-station" class="card hide">
+  <div class="kicker">FlyBoy[TV]</div>
+  <div class="title" id="stTitle"></div>
+  <div class="dim" id="stShow"></div>
+  <div class="grid">
+    <button data-do="guide">Guide</button><button data-do="skip">Next ▶</button><button data-ch2="">Home</button>
+  </div>
+</section>
+
 <section id="p-movies" class="hide">
   <div class="card">
     <div class="kicker">Movies</div>
@@ -117,6 +126,7 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
 });
 document.querySelectorAll('[data-key]').forEach(b => b.onclick = () => cmd({ key: b.dataset.key }));
 document.querySelectorAll('[data-do]').forEach(b => b.onclick = () => cmd({ do: b.dataset.do }));
+document.querySelectorAll('[data-ch2]').forEach(b => b.onclick = () => cmd({ go: '/' }));
 document.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => cmd({ do: 'seek', by: +b.dataset.seek }));
 $('save').onclick = async () => {
   const r = await cmd({ do: 'save' });
@@ -153,7 +163,7 @@ async function refresh() {
   $('online').textContent = state.tv_online ? 'TV on · ' + (ch || 'home') : 'TV offline';
   $('online').className = 'pill' + (state.tv_online ? ' on' : '');
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', (b.dataset.ch || 'home') === ch));
-  ['off', 'nag', 'dig', 'window', 'movies'].forEach(p => $('p-' + p).classList.toggle('hide', p !== (ch && ch !== 'home' ? ch : 'off')));
+  ['off', 'nag', 'dig', 'window', 'station', 'movies'].forEach(p => $('p-' + p).classList.toggle('hide', p !== (ch && ch !== 'home' ? ch : 'off')));
   if (ch === 'nag') {
     $('nagSet').textContent = tv.set || '';
     $('nagMeta').textContent = `${tv.chord || ''} · ${Math.floor((tv.elapsed || 0) / 60)} min in · ${state.practice.streak}-day streak`;
@@ -167,6 +177,10 @@ async function refresh() {
     $('winCity').textContent = tv.city ? tv.city[0].toUpperCase() + tv.city.slice(1) : '';
     $('winStation').textContent = tv.station ? (tv.playing ? 'On air: ' : 'Paused: ') + tv.station : '';
     $('cities').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.city === tv.city));
+  }
+  if (ch === 'station') {
+    $('stTitle').textContent = tv.title || '';
+    $('stShow').textContent = tv.show || ({ vault: 'FlyBoyRadio Vault', crates: 'From the Crates', yourday: 'Your Day', ident: 'FlyBoy[TV]' })[tv.kind] || '';
   }
   if (ch === 'movies') {
     $('movTitle').textContent = tv.title || 'Choosing a movie';

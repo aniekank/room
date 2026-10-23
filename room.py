@@ -3,7 +3,8 @@
   room serve              run the server (the launchd agent does this for you)
   room find               find the Samsung TV on the Wi-Fi and remember it
   room pair               one-time "Allow" prompt on the TV
-  room show nag|dig|window|movies|home   wake the TV and open a channel
+  room show nag|dig|window|movies|station|home   wake the TV and open a channel
+  room station sync       copy the FlyBoyRadio assets from the Desktop into the FlyBoy[TV] kit in iCloud Drive
   room nag                the scheduled nudge: opens Keys unless today's 20 minutes are done
   room install [HH:MM]    install to ~/Library/Application Support/Room + launchd (server + daily nag);
                           HH:MM changes the nag time and is remembered in data/settings.json
@@ -194,6 +195,9 @@ def main(argv):
         uninstall()
     elif cmd == 'status':
         status()
+    elif cmd == 'station':
+        import station
+        station.sync()
     elif cmd == 'warm':
         import sources
         sources.warm()

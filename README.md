@@ -1,6 +1,6 @@
 # Room
 
-A Samsung TV as four channels, served from your Mac. Built on a 2018 UN32M4500 (1366×768), so it runs on old Tizen browsers too.
+A Samsung TV as five channels, served from your Mac. Built on a 2018 UN32M4500 (1366×768), so it runs on old Tizen browsers too.
 
 ## Get the app
 
@@ -58,10 +58,11 @@ Your own cities go in `extra_cities`, shaped like the entries in `sources.py`. L
 | 2 | **Dig Tube** `/dig` | Channel-surfs archival clips across 43 lanes (321 searches that walk years and artists, 30 results deep): Soul Train 70s/80s, R&B on TV, quiet storm, neo-soul, go-go, Chicago/Detroit/NYC house, UK acid jazz, Afrobeat, highlife, juju, Ethio-jazz, South Africa, Congo, Jamaica, Brazil, Latin, city pop, Bollywood funk, Anatolian rock, 80s synth pop, prog and krautrock, fusion, library, scores, soft rock, gospel, jazz and hip-hop TV. OK on the TV remote or **Save** on the phone stamps the moment (6s back) into `Dig Saves.md`. |
 | 3 | **World Window** `/window` | A muted street cam or walk from Chicago, Lagos, Detroit, London, Johannesburg or Accra, that city's radio, local time and weather, plus one line on its music history. The city changes by weekday (by default Mon Chicago, Tue Lagos, Wed Detroit, Thu London, Fri Johannesburg, Sat Accra, Sun Chicago). |
 | 4 | **Movies** `/movies` | Your own video files, by default from the **Movies** folder in iCloud Drive. Add more folders in the menu or with `movies_folders`, subfolders included, and leave things out with `movies_skip` (name patterns; a leading `/` matches only at the top of a folder). Films come first, then each series or collection as its own group, then courses you list in `movies_courses` (one group each, lessons in order): ◀ ▶ jumps between groups. The same file in two places is listed once. Streams from the Mac, so nothing is copied to the TV. Picks up where you stopped. A movie iCloud hasn't downloaded yet says "In iCloud", and OK fetches it and starts it when it lands. MP4 (H.264/AAC) plays best; the TV's browser can't play most MKV or AVI files. |
+| 5 | **FlyBoy[TV]** `/station` | Your own always-on channel: tune in and it's mid-show. Mornings open with **Your Day** (calendar, reminders, Notion tasks, a study card from your notes, files you touched lately, Keys streak, weather), then your series in episode order, **FlyBoy Academy** (the courses) after lunch, a film in prime time, and the **FlyBoyRadio Vault** late at night: an old WMUC show rebuilt from its playlist, or the 2011 recording. **From the Crates** puts a record from the Crate Index on screen and plays it. FlyBoy[TV] idents run between programs. Programs coming up from iCloud are downloaded ahead and dropped again after they air. OK shows the guide, ▶ moves on. Assets live in `iCloud Drive/FlyBoy[TV]`; `bin/room station` refreshes them from `~/Desktop/FlyBoyRadio`. Notion needs your own integration key: `notion_token`, `notion_tasks`, `notion_notes` in settings.json. |
 
 **Phone remote:** `http://<mac-ip>:8788/remote` (run `room status` for the exact address). Add it to the home screen. It switches channels, has a big Save button, lane and city pickers, and wakes the TV when it's off.
 
-**TV remote:** number keys 1/2/3/4 jump channels and 0 goes home. ◀ ▶ ▲ ▼ and OK do the obvious thing on each channel, and the hint in the corner lists them.
+**TV remote:** number keys 1 to 5 jump channels and 0 goes home. ◀ ▶ ▲ ▼ and OK do the obvious thing on each channel, and the hint in the corner lists them.
 
 ## Commands
 

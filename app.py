@@ -47,7 +47,7 @@ LOGIN_PLIST = room.LA / f'{LABEL}.plist'
 CLI_NAG = room.LA / f'{room.NAG_LABEL}.plist'
 HELP_URL = 'https://github.com/aniekank/room#readme'
 NAG_TIMES = ['07:00', '08:00', '12:00', '17:00', '18:00', '19:00', '19:30', '20:00', '21:00']
-CHANNELS = [('Home', ''), ('Keys', 'nag'), ('Dig Tube', 'dig'), ('World Window', 'window'), ('Movies', 'movies')]
+CHANNELS = [('Home', ''), ('FlyBoy[TV]', 'station'), ('Keys', 'nag'), ('Dig Tube', 'dig'), ('World Window', 'window'), ('Movies', 'movies')]
 
 
 def state():

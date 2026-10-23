@@ -96,6 +96,54 @@ def _natural(s):
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s)]
 
 
+def _bdecode(b):
+    def d(i):
+        c = b[i:i + 1]
+        if c == b'i':
+            j = b.index(b'e', i)
+            return int(b[i + 1:j]), j + 1
+        if c in (b'l', b'd'):
+            i, out = i + 1, ([] if c == b'l' else {})
+            while b[i:i + 1] != b'e':
+                if c == b'l':
+                    v, i = d(i)
+                    out.append(v)
+                else:
+                    k, i = d(i)
+                    v, i = d(i)
+                    out[k.decode('utf-8', 'replace')] = v
+            return out, i + 1
+        j = b.index(b':', i)
+        n = int(b[i:j])
+        return b[j + 1:j + 1 + n], j + 1 + n
+    return d(0)[0]
+
+
+def _unfinished():
+    """Paths BiglyBT is still downloading: their files exist at full size but are mostly empty."""
+    cfg = HOME / 'Library' / 'Application Support' / 'BiglyBT' / 'downloads.config'
+    try:
+        mtime = cfg.stat().st_mtime
+    except OSError:
+        return set()
+    if _cache.get('bt_at') == mtime:
+        return _cache['bt']
+    out = set()
+    try:
+        for d in _bdecode(cfg.read_bytes()).get('downloads', []):
+            try:
+                info = _bdecode(Path(d['torrent'].decode()).read_bytes()).get('info', {})
+            except (OSError, ValueError, KeyError):
+                continue
+            total = sum(f['length'] for f in info.get('files', [])) or info.get('length', 0)
+            if total and d.get('completedbytes', 0) < total:
+                out.add(str(Path(d['save_dir'].decode('utf-8', 'replace')) / info.get('name', b'').decode('utf-8', 'replace')))
+    except (OSError, ValueError, KeyError):
+        pass
+    _cache.update(bt_at=mtime, bt=out)
+    return out
+
+
 def _skip(name, patterns, top=False):
     """A pattern starting with / only matches right inside one of your folders: "/Documents" skips
     iCloud Drive/Documents but not a Documents folder deeper down."""
@@ -111,8 +159,9 @@ def _is_course(name, courses):
 
 
 def _walk(root, patterns, courses):
-    out = []
+    out, partial = [], _unfinished()
     for dp, dns, fns in os.walk(root):
+        dns[:] = [d for d in dns if os.path.join(dp, d) not in partial]
         in_course = any(_is_course(d, courses) for d in Path(dp).relative_to(root).parts)
         # Inside a course you listed, skip patterns don't apply: it's there because you asked for it.
         dns[:] = [d for d in dns if not _skip(d, [] if in_course or _is_course(d, courses) else patterns,
@@ -124,7 +173,7 @@ def _walk(root, patterns, courses):
             elif f.startswith('.'):
                 continue
             ext = os.path.splitext(name)[1].lower()
-            if ext not in VIDEO or _skip(name, [] if in_course else patterns):
+            if ext not in VIDEO or _skip(name, [] if in_course else patterns) or os.path.join(dp, name) in partial:
                 continue
             p = Path(dp) / f
             size = 0

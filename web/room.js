@@ -43,6 +43,7 @@ var Room = (function () {
       if (k === '1') { location.href = '/nag'; return; }
       if (k === '2') { location.href = '/dig'; return; }
       if (k === '3') { location.href = '/window'; return; }
+      if (k === '5') { location.href = '/station'; return; }
       if (k === '4') { location.href = '/movies'; return; }
       if (k === '0') { location.href = '/'; return; }
       if (handler(k) !== false) e.preventDefault();

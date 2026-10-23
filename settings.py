@@ -9,6 +9,12 @@
   extra_lanes    {"Lane": ["search", ...]}  your own Dig Tube lanes
   movies_folders ["~/Movies", ...] where the Movies channel looks, subfolders included (default: iCloud Drive/Movies)
   movies_courses ["*Hadoop*", ...] top folders that are courses: one group each, lessons in order, after the series
+  station_kit        "~/..."      FlyBoy[TV] kit folder (default: iCloud Drive/FlyBoy[TV]); `room station sync` fills it
+  station_source     "~/..."      where sync copies from (default: ~/Desktop/FlyBoyRadio)
+  station_recording  "~/....mp3"  the archive FlyBoyRadio recording that airs late at night
+  notion_token       "secret_..." your Notion integration key, for Your Day
+  notion_tasks       "<db id>"    a tasks database: open tasks, soonest due first
+  notion_notes       ["<page>"]   pages a study card is drawn from
   movies_skip    ["*Udemy*", ...] folder or file names to leave out, * as a wildcard, any case; a leading / means
                                   only right inside one of your folders ("/Documents")
 """
@@ -30,6 +36,12 @@ DEFAULTS = {
     'movies_folders': None,
     'movies_skip': [],
     'movies_courses': [],
+    'station_kit': None,
+    'station_source': None,
+    'station_recording': None,
+    'notion_token': None,
+    'notion_tasks': None,
+    'notion_notes': [],
 }
 
 

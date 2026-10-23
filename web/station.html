@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlyBoy[TV] · Room</title>
+<link rel="stylesheet" href="/room.css">
+<style>
+  /* The FlyBoyRadio promo look: black cards, a red bar, a yellow tag, cream Arial Black, Courier credits. */
+  body { background: #0b0b0a; }
+  .ab { font-family: "Arial Black", "Arial", "Helvetica Neue", sans-serif; font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em; }
+  .cn { font-family: "Courier New", Courier, monospace; font-weight: 700; }
+  .tag { display: inline-block; background: #e9ff42; color: #0b0b0a; padding: .35vh .7vw; font-size: 1.6vw; }
+  .cream { color: #f1eee6; }
+  .yel { color: #e9ff42; }
+  #stage, #v, #seg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #v { background: #000; display: none; }
+  #v.on { display: block; }
+  #ytbox { position: absolute; display: none; background: #000; }
+  #ytbox.on { display: block; }
+  #ytbox iframe { width: 100%; height: 100%; border: 0; }
+  body.k-vault #ytbox { left: 52vw; top: 27vh; width: 42vw; height: 23.6vw; border-left: .5vw solid #c5221f; }
+  body.k-crates #ytbox { left: 66vw; top: 62vh; width: 28vw; height: 15.75vw; }
+  body.k-yourday #ytbox { left: -2px; top: -2px; width: 1px; height: 1px; }   /* sound only */
+
+  /* segment cards */
+  .card { position: absolute; left: 6vw; right: 6vw; top: 0; bottom: 0; }
+  .card .bar { position: absolute; left: -2vw; width: .65vw; background: #c5221f; }
+  .big { font-size: 7vw; line-height: .95; }
+  .mid { font-size: 3.4vw; line-height: 1.05; }
+  .credit { font-size: 1.6vw; margin-top: 1.6vh; }
+  .fade { -webkit-animation: rise .7s ease-out both; animation: rise .7s ease-out both; }
+  @-webkit-keyframes rise { from { opacity: 0; -webkit-transform: translateY(3vh); } to { opacity: 1; -webkit-transform: none; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(3vh); } to { opacity: 1; transform: none; } }
+
+  .ident { top: 32vh; }
+  .ident .bar { top: 0; height: 36vh; }
+  .ident .logo { font-size: 10vw; line-height: 1; margin-top: 1.4vh; }
+  .ident .logo b { color: #e9ff42; }
+
+  .vault .art, .crates .cover { position: absolute; left: 0; top: 27vh; width: 36vh; height: 36vh; background: #222 center/cover no-repeat; }
+  .vault .head, .crates .head, .yd .head { position: absolute; left: 0; top: 7vh; }
+  .vault .list { position: absolute; left: 52vw; right: 0; top: 73vh; bottom: 6vh; overflow: hidden; font-size: 1.45vw; line-height: 1.55; }
+  .vault .list div { color: rgba(241,238,230,.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vault .list div.on { color: #e9ff42; }
+  .vault .now, .crates .info { position: absolute; left: 0; top: 68vh; width: 46vw; }
+  .crates .info { left: calc(36vh + 4vw); top: 27vh; width: auto; right: 0; }
+  .crates .rec { font-size: 4.2vw; line-height: 1.02; }
+  .crates .meta { font-size: 1.7vw; margin-top: 2vh; line-height: 1.6; }
+  .crates .dots { position: absolute; left: 0; top: 66vh; font-size: 1.4vw; }
+
+  .yd .body { position: absolute; left: 0; right: 0; top: 24vh; }
+  .yd .row { font-size: 2.5vw; line-height: 1.5; color: #f1eee6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .yd .row .cn { color: #e9ff42; font-size: 2vw; display: inline-block; min-width: 17vw; }
+  .yd .quote { font-size: 3vw; line-height: 1.25; max-width: 80vw; }
+  .yd .steps { position: absolute; left: 0; bottom: 7vh; font-size: 1.3vw; }
+  .yd .steps span { margin-right: 1.6vw; color: rgba(241,238,230,.4); }
+  .yd .steps span.on { color: #e9ff42; }
+
+  /* lower third, as in the promos */
+  .lt { position: absolute; left: 3vw; bottom: 6vh; background: rgba(11,11,10,.9); padding: 1.6vh 2vw 1.8vh 2.4vw; max-width: 70vw;
+    -webkit-transition: opacity .5s, -webkit-transform .5s; transition: opacity .5s, transform .5s; opacity: 0; -webkit-transform: translateX(-2vw); transform: translateX(-2vw); }
+  .lt.on { opacity: 1; -webkit-transform: none; transform: none; }
+  .lt:before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: .6vw; background: #c5221f; }
+  .lt .t { font-size: 3vw; margin-top: .8vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lt .c { font-size: 1.5vw; margin-top: .5vh; }
+
+  .bug { position: absolute; right: 3vw; top: 3.5vh; font-size: 1.5vw; color: rgba(241,238,230,.75); text-shadow: 0 0 .6vw rgba(0,0,0,.8); }
+  .bug b { color: #e9ff42; }
+
+  .guide { position: absolute; left: 0; right: 0; bottom: 0; top: 0; background: rgba(11,11,10,.93); display: none; }
+  .guide.on { display: block; }
+  .guide .card { top: 10vh; }
+  .guide .g { font-size: 2.2vw; line-height: 1.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .guide .g .cn { color: #e9ff42; display: inline-block; width: 11vw; font-size: 1.9vw; }
+  .guide .g.now { color: #e9ff42; }
+  .guide .g small { color: rgba(241,238,230,.5); font-size: 1.5vw; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="v" preload="auto"></video>
+  <div id="seg"></div>
+  <div id="ytbox"><div id="yt"></div></div>
+</div>
+<div class="lt" id="lt"><span class="tag ab" id="ltTag">Now</span><div class="t ab cream" id="ltTitle"></div><div class="c cn yel" id="ltCredit"></div></div>
+<div class="bug ab"><b>FLYBOY</b>[TV] · <span class="cn" id="clock"></span></div>
+<div class="guide" id="guide"><div class="card"><span class="tag ab">On FlyBoy[TV]</span><div class="mid ab cream" id="gPart" style="margin:1.4vh 0 3vh"></div><div id="gList"></div></div></div>
+<audio id="a"></audio>
+<div class="hint">OK guide · ▶ next program · 0 menu</div>
+
+<script src="/room.js"></script>
+<script>
+var cur = null, nexts = [], t0 = 0, off0 = 0, endT = null, tick = null, slideT = null, player = null, ytReady = false, ytWant = null, ltT = null, step = -1, yd = null;
+var v = document.getElementById('v'), a = document.getElementById('a'), seg = document.getElementById('seg');
+var ART = [];
+for (var i = 1; i <= 10; i++) ART.push('/station/kit/art/flyboyradio-' + (i < 10 ? '0' : '') + i + '.png');
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+function hm(t) { return new Date(t * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+function elapsed() { return off0 + (Date.now() - t0) / 1000; }
+function card(cls, html) { seg.innerHTML = '<div class="card ' + cls + ' fade">' + html + '</div>'; }
+
+function lower(tag, title, credit, ms) {
+  $('ltTag').textContent = tag; $('ltTitle').textContent = title; $('ltCredit').textContent = credit || '';
+  $('lt').className = 'lt on';
+  clearTimeout(ltT);
+  ltT = setTimeout(function () { $('lt').className = 'lt'; }, ms || 8000);
+}
+
+// ------------------------------------------------------------ tuning
+
+function tune() {
+  Room.get('/api/station/now').then(function (r) {
+    cur = r.item; nexts = r.next; off0 = r.offset; t0 = Date.now();
+    $('gPart').textContent = r.daypart;
+    stop();
+    document.body.className = 'k-' + cur.kind;
+    (SHOW[cur.kind] || SHOW.ident)(cur);
+    clearTimeout(endT);
+    endT = setTimeout(tune, Math.max(1, cur.dur - off0) * 1000 + 400);
+    drawGuide();
+  }).catch(function () { setTimeout(tune, 5000); });
+}
+
+function stop() {
+  v.pause(); v.removeAttribute('src'); v.className = '';
+  a.pause(); a.removeAttribute('src');
+  ytStop();
+  clearInterval(tick); tick = null; clearInterval(slideT); step = -1;
+  seg.innerHTML = '';
+  $('lt').className = 'lt';
+}
+
+function next() { Room.post('/api/station/skip').then(tune); }
+
+// ------------------------------------------------------------ YouTube for segments
+
+function ytPlay(id, start, volume) {
+  ytWant = { id: id, start: start, volume: volume };
+  $('ytbox').className = 'on';
+  if (!ytReady) return;
+  player.loadVideoById({ videoId: id, startSeconds: start });
+  player.unMute(); player.setVolume(volume == null ? 100 : volume);
+}
+function ytStop() { ytWant = null; $('ytbox').className = ''; if (ytReady) player.stopVideo(); }
+
+// ------------------------------------------------------------ what each kind looks like
+
+var SHOW = {
+  ident: function () {
+    card('ident', '<div class="bar"></div><span class="tag ab">You\'re watching</span>' +
+      '<div class="logo ab cream"><b>FLYBOY</b>[TV]</div><div class="credit cn yel">T.A.S.K. Productions · Channel 5 · ' + esc($('gPart').textContent) + '</div>');
+    if (elapsed() < 5) { a.src = '/station/kit/audio/tag.wav'; a.currentTime = elapsed(); a.play(); }
+  },
+
+  video: function (it, src) {
+    v.className = 'on';
+    v.src = src || '/media?id=' + encodeURIComponent(it.id);
+    var at = elapsed();
+    v.addEventListener('loadedmetadata', function once() {
+      v.removeEventListener('loadedmetadata', once);
+      if (it.kind === 'video' && v.duration && isFinite(v.duration)) Room.post('/api/station/dur', { uid: it.uid, dur: Math.round(v.duration) });
+      if (at > 1 && at < v.duration) v.currentTime = elapsed();
+    });
+    v.play();
+    lower(it.kind === 'promo' ? 'Promo' : elapsed() > 30 ? 'You\'re watching' : 'Now', it.title, it.show && it.show !== it.title ? it.show + ' · FlyBoy[TV]' : 'FlyBoy[TV]');
+    var left = it.dur - elapsed();
+    if (nexts[1] && left > 25) setTimeout(function () { if (cur === it) lower('Up next', nexts[1].title, hm(nexts[1].start) + ' · ' + (nexts[1].show || 'FlyBoy[TV]')); }, (left - 22) * 1000);
+  },
+
+  promo: function (it) { SHOW.video(it, '/station/kit/' + it.src); },
+
+  recording: function (it) {
+    var s = it.show || { label: '', all: [] };
+    card('vault', '<div class="head"><span class="tag ab">FlyBoyRadio · the archive</span><div class="mid ab cream" style="margin-top:1.2vh">Live on WMUC 88.1</div>' +
+      '<div class="credit cn yel">' + esc(s.label) + ' · College Park · T.A.S.K. on the boards</div></div>' +
+      '<div class="art" id="art"></div><div class="list" style="top:22vh">' + s.all.map(function (x) { return '<div>' + esc(x) + '</div>'; }).join('') + '</div>');
+    a.src = '/station/recording';
+    a.addEventListener('loadedmetadata', function once() { a.removeEventListener('loadedmetadata', once); a.currentTime = elapsed(); });
+    a.play();
+    a.onerror = function () { if (cur === it) next(); };
+    slides();
+  },
+
+  vault: function (it) {
+    card('vault', '<div class="head"><span class="tag ab">FlyBoyRadio Vault</span><div class="mid ab cream" style="margin-top:1.2vh">' + esc(it.label) + '</div>' +
+      '<div class="credit cn yel">WMUC 88.1 FM · Sundays 3-6pm · rebuilt from the playlist</div></div>' +
+      '<div class="art" id="art"></div><div class="now" id="vnow"></div>' +
+      '<div class="list" id="vlist">' + it.all.map(function (x) { return '<div>' + esc(x) + '</div>'; }).join('') + '</div>');
+    slides();
+    tracks(it, it.tracks, function (t) {
+      $('vnow').innerHTML = '<span class="tag ab">On the air</span><div class="ab cream" style="font-size:2.6vw;margin-top:1vh">' + esc(t.title) + '</div>' +
+        '<div class="cn yel" style="font-size:1.6vw;margin-top:.6vh">' + esc(t.artist) + (t.note ? ' · ' + esc(t.note) : '') + '</div>';
+      var rows = $('vlist').children, want = t.artist + ': ' + t.title;
+      for (var i = 0; i < rows.length; i++) rows[i].className = rows[i].textContent === want ? 'on' : '';
+    });
+  },
+
+  crates: function (it) {
+    tracks(it, it.records, function (r, i) {
+      card('crates', '<div class="head"><span class="tag ab">From the Crates</span><div class="credit cn yel">The digging list · ' + (i + 1) + ' of ' + it.records.length + '</div></div>' +
+        '<div class="cover" style="background-image:url(' + esc(r.img).replace('ab67616d00004851', 'ab67616d0000b273') + ')"></div>' +
+        '<div class="info"><div class="rec ab cream">' + esc(r.title) + '</div><div class="ab yel" style="font-size:2.2vw;margin-top:1vh">' + esc(r.artist) + '</div>' +
+        '<div class="meta cn cream">' + [r.year, r.fmt, r.cond].filter(Boolean).map(esc).join(' · ') + '<br>' +
+        (r.seller ? esc(r.seller) + "'s crate" + (r.price ? ' · $' + esc(r.price) : '') : '') + (r.notes ? '<br><span class="yel">' + esc(r.notes) + '</span>' : '') + '</div></div>');
+    });
+  },
+
+  yourday: function (it) {
+    Room.get('/api/station/yourday').then(function (d) { yd = d; if (cur === it) dayCard(true); });
+    if (it.records && it.records[0] && it.records[0].vid) ytPlay(it.records[0].vid, 40, 22);
+    else if (elapsed() < 5) { a.src = '/station/kit/audio/tag.wav'; a.play(); }
+    card('yd', '<div class="head"><span class="tag ab">Your Day</span><div class="mid ab cream" style="margin-top:1.2vh">Tuning in…</div></div>');
+    tick = setInterval(function () { dayCard(false); }, 1000);
+  }
+};
+
+// a segment that steps through YouTube tracks: which one is on depends on how far into the segment we are
+function tracks(it, list, show) {
+  var per = it.per || 90, last = -1;
+  function at() {
+    var e = elapsed(), i = Math.min(list.length - 1, Math.floor(e / per)), r = list[i];
+    if (i === last) return;
+    last = i;
+    show(r, i);
+    if (r.vid) ytPlay(r.vid, 30 + Math.floor(e - i * per), 100);
+    else {  // still being looked up on YouTube: check back shortly
+      ytStop();
+      setTimeout(function () {
+        Room.get('/api/station/now').then(function (n) {
+          if (cur !== it || n.item.uid !== it.uid) return;
+          var fresh = n.item.tracks || n.item.records || [];
+          for (var j = 0; j < list.length && j < fresh.length; j++) list[j].vid = fresh[j].vid;
+          last = -1;
+        });
+      }, 4000);
+    }
+  }
+  at();
+  tick = setInterval(at, 1000);
+}
+
+function slides() {
+  var n = Math.floor(elapsed() / 12);
+  function go() { var el = $('art'); if (el) el.style.backgroundImage = 'url(' + ART[n++ % ART.length] + ')'; }
+  go();
+  slideT = setInterval(go, 12000);
+}
+
+// ------------------------------------------------------------ Your Day
+
+var DAY = ['Today', 'Calendar', 'To do', 'Study card', 'On the desk', 'Keys & Dig'];
+function dayCard(force) {
+  if (!yd) return;
+  var s = Math.min(DAY.length - 1, Math.floor(elapsed() / 13));
+  if (s === step && !force) return;
+  step = s;
+  var now = new Date(), body = '', title = DAY[s];
+  if (s === 0) {
+    var c = yd.city, w = c && c.weather;
+    title = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    body = '<div class="row"><span class="cn">Right now</span>' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + '</div>' +
+      (c ? '<div class="row"><span class="cn">World Window</span>' + esc(c.name) + (w ? ' · ' + w.temp + '°' + w.unit : '') + '</div>' : '') +
+      '<div class="row"><span class="cn">On today</span>' + yd.events.length + ' on the calendar · ' + (yd.reminders.length + yd.tasks.length) + ' to do</div>';
+  } else if (s === 1) {
+    body = yd.events.length ? yd.events.slice(0, 6).map(function (e) {
+      return '<div class="row"><span class="cn">' + (e.allDay ? 'All day' : hm(e.start)) + '</span>' + esc(e.title) + '</div>';
+    }).join('') : '<div class="row">Nothing on the calendar. The day is yours.</div>';
+  } else if (s === 2) {
+    var todo = yd.reminders.map(function (r) { return { t: r.title, w: r.list }; }).concat(yd.tasks.map(function (t) { return { t: t.title, w: 'Notion' + (t.due ? ' · due ' + t.due.slice(5) : '') }; }));
+    body = todo.length ? todo.slice(0, 6).map(function (x) { return '<div class="row"><span class="cn">' + esc(x.w).slice(0, 14) + '</span>' + esc(x.t) + '</div>'; }).join('')
+      : '<div class="row">Nothing open. Rare air.</div>';
+  } else if (s === 3) {
+    body = yd.card ? '<div class="quote ab cream">“' + esc(yd.card.text) + '”</div><div class="credit cn yel">From your notes · ' + esc(yd.card.page) + '</div>'
+      : '<div class="row">Connect Notion and your study notes show up here.</div><div class="credit cn yel">settings.json: notion_token, notion_notes</div>';
+  } else if (s === 4) {
+    body = yd.files.length ? yd.files.map(function (f) { return '<div class="row"><span class="cn">' + esc(f.kind) + '</span>' + esc(f.name) + ' <span class="cn" style="min-width:0;font-size:1.5vw;color:rgba(241,238,230,.5)">' + esc(f.where) + '</span></div>'; }).join('')
+      : '<div class="row">A quiet few days on the desk.</div>';
+  } else {
+    var p = yd.practice;
+    body = '<div class="row"><span class="cn">Keys</span>' + (p.today ? 'Done today · ' : 'Not yet today · ') + p.streak + '-day streak</div>' +
+      yd.saves.map(function (x) { return '<div class="row"><span class="cn">Dig save</span>' + esc(x.title) + '</div>'; }).join('');
+  }
+  card('yd', '<div class="head"><span class="tag ab">Your Day</span><div class="mid ab cream" style="margin-top:1.2vh">' + esc(title) + '</div></div>' +
+    '<div class="body fade">' + body + '</div>' +
+    '<div class="steps cn">' + DAY.map(function (d, i) { return '<span class="' + (i === s ? 'on' : '') + '">' + d + '</span>'; }).join('') + '</div>');
+}
+
+// ------------------------------------------------------------ guide, clock, remote
+
+function drawGuide() {
+  var rows = [{ title: cur.title, show: cur.show, start: cur.start, now: true }].concat(nexts.filter(function (n) { return n.kind !== 'ident'; }));
+  $('gList').innerHTML = rows.slice(0, 7).map(function (r) {
+    return '<div class="g ab ' + (r.now ? 'now' : 'cream') + '"><span class="cn">' + (r.now ? 'Now' : hm(r.start)) + '</span>' + esc(r.title) +
+      (r.show && r.show !== r.title ? ' <small class="cn">' + esc(r.show) + '</small>' : '') + '</div>';
+  }).join('');
+}
+var guideT = null;
+function guide() { $('guide').className = 'guide on'; clearTimeout(guideT); guideT = setTimeout(function () { $('guide').className = 'guide'; }, 8000); }
+
+setInterval(function () { $('clock').textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }, 1000);
+v.addEventListener('ended', function () { tune(); });
+v.addEventListener('error', function () { if (cur && (cur.kind === 'video' || cur.kind === 'promo')) next(); });
+
+function act(k) {
+  if (k === 'enter' || k === 'info' || k === 'guide') guide();
+  else if (k === 'right' || k === 'ff' || k === 'next' || k === 'skip') next();
+  else if (k === 'back') location.href = '/';
+  else return false;
+}
+Room.keys(function (k) { return act(k); });
+Room.poll(function (c) { act(c.key || c.do); });
+Room.report(function () { return { channel: 'station', title: cur ? cur.title : '', kind: cur ? cur.kind : '', show: cur ? cur.show || '' : '' }; });
+Room.youtube('yt', {}, function (p) { player = p; ytReady = true; if (ytWant) ytPlay(ytWant.id, ytWant.start, ytWant.volume); },
+  null, function () { $('ytbox').className = ''; });  // the uploader blocked embedding: the card stays up without it
+tune();
+</script>
+</body>
+</html>

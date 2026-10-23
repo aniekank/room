@@ -8,11 +8,11 @@ VERSION = os.environ.get('ROOM_VERSION', '1.0.0')
 a = Analysis(
     [os.path.join(ROOT, 'app.py')],
     pathex=[ROOT],
-    datas=[(os.path.join(ROOT, 'web'), 'web'),
+    datas=[(os.path.join(ROOT, 'web'), 'web'), (os.path.join(ROOT, 'scripts'), 'scripts'),
            (os.path.join(ICONS, 'menubar.png'), '.'),
            (os.path.join(ICONS, 'menubar@2x.png'), '.')],
     # Imported inside functions, or only by the server thread.
-    hiddenimports=['server', 'sources', 'dig', 'tv', 'room', 'settings', 'engine', 'paths', 'movies',
+    hiddenimports=['server', 'sources', 'dig', 'tv', 'room', 'settings', 'engine', 'paths', 'movies', 'station', 'personal',
                    'samsungtvws', 'qrcode', 'certifi'],
     # The C speedups in these ship arm64-only wheels; each falls back to pure Python without them.
     excludes=['tkinter', 'PIL', 'pytest', 'multidict._multidict', 'multidict._testcapi',
