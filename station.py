@@ -69,7 +69,8 @@ def daypart(t):
 
 def sync(log=print):
     """Copy the FlyBoyRadio assets into the kit in iCloud Drive (run from Terminal: the Desktop is off-limits
-    to background apps). Small files only; the archive recording stays where it is and airs from there."""
+    to background apps). Small files only; the archive recording stays where it is and airs from there.
+    art/logo.png (the FlyBoyRadio pin-up logo, cut out of its white background) was made once and lives in the kit."""
     src, dst = Path(settings.get('station_source') or SOURCE_DEFAULT).expanduser(), kit()
     picks = [('Flyboy Radio - Every Playlist (2008-2011).md', 'data/playlists.md'),
              ('Crate Index/data.json', 'data/crates.json'),

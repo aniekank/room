@@ -122,6 +122,8 @@
 
   .bug { position: absolute; right: 3vw; top: 3.5vh; font-size: 1.5vw; color: rgba(241,238,230,.75); text-shadow: 0 0 .6vw rgba(0,0,0,.8); }
   .bug b { color: #e9ff42; }
+  .bug .buglogo { height: 6.5vh; vertical-align: middle; margin-right: .8vw; -webkit-filter: drop-shadow(0 0 .4vw rgba(0,0,0,.8)); filter: drop-shadow(0 0 .4vw rgba(0,0,0,.8)); }
+  .ident .bigLogo { position: absolute; right: 0; top: -10vh; height: 54vh; -webkit-animation: rise .9s ease-out both; animation: rise .9s ease-out both; }
 
   .guide { position: absolute; left: 0; right: 0; bottom: 0; top: 0; background: rgba(11,11,10,.93); display: none; }
   .guide.on { display: block; }
@@ -139,7 +141,7 @@
   <div id="ytbox"><div id="yt"></div><video id="mv" preload="auto"></video></div>
 </div>
 <div class="lt" id="lt"><span class="tag ab" id="ltTag">Now</span><div class="t ab cream" id="ltTitle"></div><div class="c cn yel" id="ltCredit"></div></div>
-<div class="bug ab"><b>FLYBOY</b>[TV] · <span class="cn" id="clock"></span></div>
+<div class="bug ab"><img class="buglogo" src="/station/kit/art/logo.png" alt=""><b>FLYBOY</b>[TV] · <span class="cn" id="clock"></span></div>
 <div class="guide" id="guide"><div class="card"><span class="tag ab">On FlyBoy[TV]</span><div class="mid ab cream" id="gPart" style="margin:1.4vh 0 3vh"></div><div id="gList"></div></div></div>
 <div class="od" id="od"><div class="card"><span class="tag ab">On demand</span><div class="mid ab cream" style="margin-top:1.2vh">Put anything on</div>
   <div class="tabs ab" id="odTabs"></div><div id="odList"></div><div class="more cn" id="odMore"></div></div></div>
@@ -209,7 +211,8 @@ function ytStop() { ytWant = null; ytNext = null; $('ytbox').className = ''; if 
 var SHOW = {
   ident: function () {
     card('ident', '<div class="bar"></div><span class="tag ab">You\'re watching</span>' +
-      '<div class="logo ab cream"><b>FLYBOY</b>[TV]</div><div class="credit cn yel">T.A.S.K. Productions · Channel 5 · ' + esc($('gPart').textContent) + '</div>');
+      '<div class="logo ab cream"><b>FLYBOY</b>[TV]</div><div class="credit cn yel">T.A.S.K. Productions · Channel 5 · ' + esc($('gPart').textContent) + '</div>' +
+      '<img class="bigLogo" src="/station/kit/art/logo.png" alt="">');
     if (elapsed() < 5) { a.src = '/station/kit/audio/tag.wav'; a.currentTime = elapsed(); a.play(); }
   },
 
