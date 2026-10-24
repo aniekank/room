@@ -282,9 +282,8 @@ class Handler(SimpleHTTPRequestHandler):
                     _queue.append({'go': '/' + ch})
                 return self._json({'ok': True, 'was_on': True})
             try:
-                on = tv.ensure_on()
-                tv.open_url(f'http://{tv.mac_ip()}:{PORT}/{ch}')
-                return self._json({'ok': True, 'was_on': on})
+                up = tv.bring_up(f'http://{tv.mac_ip()}:{PORT}/{ch}', lambda: time.time() - _tv_seen < 5)
+                return self._json({'ok': up, 'was_on': False, 'error': '' if up else 'the TV did not open the page'})
             except Exception as e:
                 return self._json({'ok': False, 'error': str(e)}, 500)
         if p == '/api/tv':  # TV heartbeat with what it's showing

@@ -99,12 +99,24 @@ def wake(mac=None):
         return False
     raw = bytes.fromhex(mac.replace(':', '').replace('-', ''))
     packet = b'\xff' * 6 + raw * 16
+    # Some networks (guest Wi-Fi, a VPN holding the default route) refuse 255.255.255.255, so also try this network's
+    # own broadcast address and the TV itself.
+    host = load_config().get('tv_host')
+    targets = ['255.255.255.255']
+    if host:
+        targets += [host.rsplit('.', 1)[0] + '.255', host]
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    for port in (9, 7):
-        s.sendto(packet, ('255.255.255.255', port))
+    sent = 0
+    for addr in targets:
+        for port in (9, 7):
+            try:
+                s.sendto(packet, (addr, port))
+                sent += 1
+            except OSError:
+                pass
     s.close()
-    return True
+    return sent > 0
 
 
 def is_on(timeout=2.0):
@@ -136,6 +148,30 @@ def ensure_on(wait=25):
 
 def open_url(url):
     _tv().open_browser(url)
+
+
+def bring_up(url, page_up, wait=12):
+    """Open a Room page on the TV whatever state it's in. A 2018 set answers on the network in standby and doesn't say
+    whether it's on, so: wake it and open the page; if no Room page checks in, it was in standby, so press Power and open
+    it again. A TV that's on (even in another app) shows the page the first time and never gets the Power key."""
+    wake()
+    for attempt in range(2):
+        try:
+            open_url(url)
+        except Exception:
+            pass
+        end = time.time() + wait
+        while time.time() < end:
+            if page_up():
+                return True
+            time.sleep(1)
+        if attempt == 0:
+            try:
+                key('KEY_POWER')
+            except Exception:
+                return False  # fully off and not answering: it needs the remote (or "Power On with Mobile" turned on)
+            time.sleep(8)  # the set takes a moment to come up
+    return page_up()
 
 
 def key(name):
