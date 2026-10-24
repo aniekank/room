@@ -1,11 +1,19 @@
 /* TV canvas. Sized in vw/vh so it reads the same on a 1280 or 1920 browser viewport,
-   with a 4% safe area for overscan. No grid, no flex gap (old Tizen engine). */
+   with a 4% safe area for overscan. No grid, no flex gap, no backdrop blur (old Tizen engine). */
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* Room's design language: warm cream on near-black, one gold accent, a serif for display and Inter for the rest.
+   Fonts load from Google; without the internet the system sans takes over. */
 html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
 body {
-  background: #0d0b10; color: #f3ede4;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background: #0b0a0f; color: #f3ede4;
+  font-family: Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+.serif { font-family: "Instrument Serif", Georgia, "Times New Roman", serif; font-weight: 400; letter-spacing: -0.01em; }
+.gold { color: #f6c26b; }
+.glass { background: rgba(20, 18, 26, .62); border: 1px solid rgba(255, 255, 255, .08); }
+.ease { -webkit-transition: all .35s cubic-bezier(.2, .8, .2, 1); transition: all .35s cubic-bezier(.2, .8, .2, 1); }
 .safe { position: absolute; left: 4vw; right: 4vw; top: 4vh; bottom: 4vh; }
 .row { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
 .col { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; }

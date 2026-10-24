@@ -6,51 +6,69 @@
 <title>Movies · Room</title>
 <link rel="stylesheet" href="/room.css">
 <style>
-  body { background: radial-gradient(ellipse at 20% 0%, #2a1f2e 0%, #0d0b10 60%); }
-  .head h1 { font-size: 4.4vw; font-weight: 800; letter-spacing: -0.03em; margin: 1vh 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .head .dim { font-size: 1.4vw; }
-  #list { position: absolute; left: 0; right: 30vw; top: 17vh; bottom: 6vh; overflow: hidden; }
-  .m .th { float: left; width: 5.2vh; height: 7.8vh; margin: -.4vh 1.2vw -.4vh 0; background: #222 center/cover no-repeat; border-radius: .3vw; }
-  #pv { position: absolute; right: 0; top: 17vh; width: 27vw; bottom: 8vh; text-align: center; }
-  #pv .img { width: 100%; height: 64vh; background: center/contain no-repeat; }
-  #pv .cap { font-size: 1.4vw; color: rgba(243,237,228,.6); margin-top: 1.4vh; }
-  .m { padding: 1.5vh 1.6vw; margin-bottom: 0.8vh; border-radius: 0.8vw; border: 0.3vw solid transparent; background: rgba(255,255,255,.04); }
-  .m.sel { border-color: #f6c26b; background: rgba(246,194,107,.12); }
-  .m .t { font-size: 2.2vw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .m .s { font-size: 1.3vw; color: rgba(243,237,228,.55); margin-top: .4vh; }
-  .m .s b { color: #f6c26b; font-weight: 600; }
-  .bar { height: .5vh; background: rgba(255,255,255,.12); margin-top: .9vh; border-radius: 99px; overflow: hidden; }
-  .bar i { display: block; height: 100%; background: #f6c26b; }
-  .empty { font-size: 2vw; line-height: 1.5; max-width: 70vw; color: rgba(243,237,228,.75); }
+  body { background: #0b0a0f; }
+  /* the selected title, large: its poster blurred into the background */
+  #bd { position: absolute; left: -8%; top: -8%; width: 116%; height: 116%; background: #1a1622 center/cover no-repeat;
+    -webkit-filter: blur(4.5vw) saturate(1.25) brightness(.5); filter: blur(4.5vw) saturate(1.25) brightness(.5); }
+  .veil { position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+    background: -webkit-linear-gradient(top, rgba(11,10,15,.15), rgba(11,10,15,.6) 50%, rgba(11,10,15,.96) 75%);
+    background: linear-gradient(to bottom, rgba(11,10,15,.15), rgba(11,10,15,.6) 50%, rgba(11,10,15,.96) 75%); }
+  .hero { position: absolute; left: 5vw; right: 34vw; top: 8vh; }
+  .hero .k { font-size: 1.1vw; letter-spacing: .3em; text-transform: uppercase; color: #f6c26b; font-weight: 700; }
+  .hero h1 { font-size: 4.6vw; line-height: 1; margin: 1.2vh 0 0; max-height: 2.1em; overflow: hidden; }
+  .hero .st { font-size: 1.5vw; color: rgba(243,237,228,.8); margin-top: 1.8vh; }
+  .hero .st b { color: #f6c26b; font-weight: 600; }
+  .hero .bar { height: .6vh; width: 40%; background: rgba(255,255,255,.18); border-radius: 99px; margin-top: 1.6vh; overflow: hidden; }
+  .hero .bar i { display: block; height: 100%; background: #f6c26b; }
+  .hero .fold { font-size: 1.1vw; color: rgba(243,237,228,.45); margin-top: 1.6vh; }
+  #hp { position: absolute; right: 5vw; top: 6vh; width: 26vw; height: 40vh; background: center/contain no-repeat; }
+
+  /* shelves: the current one big, the next one peeking */
+  #shelves { position: absolute; left: 5vw; right: 0; top: 52vh; bottom: 0; overflow: hidden; }
+  .shelf { margin-bottom: 2.4vh; }
+  .shelf .name { font-size: 1.35vw; font-weight: 600; color: rgba(243,237,228,.8); margin-bottom: 1.2vh; }
+  .shelf .name span { color: rgba(243,237,228,.4); font-weight: 400; margin-left: .6vw; }
+  .strip { white-space: nowrap; padding: 1vh 0 1.4vh 1vw; margin-left: -1vw; -webkit-transition: -webkit-transform .35s cubic-bezier(.2,.8,.2,1); transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+  .card { display: inline-block; vertical-align: top; width: 9.4vw; height: 14.1vw; margin-right: 1.1vw; border-radius: .7vw;
+    background: #221d2b center/cover no-repeat; position: relative; overflow: hidden; white-space: normal;
+    box-shadow: 0 1vh 2vh rgba(0,0,0,.35); -webkit-transition: all .25s; transition: all .25s; }
+  .card .ttl { position: absolute; left: .8vw; right: .8vw; bottom: 1.2vh; font-size: 1.15vw; line-height: 1.15; }
+  .card.np { background: -webkit-linear-gradient(135deg, #3b2c4f, #17131f); background: linear-gradient(135deg, #3b2c4f, #17131f); }
+  .card.np .ttl { font-family: "Instrument Serif", Georgia, serif; font-size: 1.35vw; line-height: 1.1; max-height: 5.5em; overflow: hidden; }
+  .card.np .ep { display: block; font-family: Inter, sans-serif; font-size: .8vw; font-weight: 700; letter-spacing: .15em; color: #f6c26b; margin-bottom: .6vh; }
+  .card .pip { position: absolute; left: 0; right: 0; bottom: 0; height: .5vh; background: rgba(0,0,0,.5); }
+  .card .pip i { display: block; height: 100%; background: #f6c26b; }
+  .card .cl { position: absolute; right: .5vw; top: .6vh; font-size: .85vw; font-weight: 700; padding: .2vh .55vw; border-radius: 99px; background: #f6c26b; color: #1a1220; }
+  .card.sel { box-shadow: 0 0 0 .28vw #f6c26b, 0 2vh 4vh rgba(0,0,0,.6); -webkit-transform: scale(1.07); transform: scale(1.07); }
+  .shelf.next { opacity: .45; }
+  .shelf.next .card { width: 7vw; height: 10.5vw; }
+
+  .empty { position: absolute; left: 5vw; top: 30vh; font-size: 2vw; line-height: 1.5; max-width: 70vw; color: rgba(243,237,228,.75); }
   .empty b { color: #f6c26b; }
   #play { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #000; display: none; }
   #play.on { display: block; }
   video { width: 100%; height: 100%; background: #000; }
-  .osd { position: absolute; left: 0; right: 0; bottom: 0; padding: 4vh 4vw 5vh;
+  .osd { position: absolute; left: 0; right: 0; bottom: 0; padding: 4vh 5vw 5vh;
     background: -webkit-linear-gradient(top, rgba(0,0,0,0), rgba(0,0,0,.85)); background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.85));
     -webkit-transition: opacity .4s; transition: opacity .4s; }
   .osd.off { opacity: 0; }
-  .osd h2 { font-size: 2.6vw; margin: 0 0 1.5vh; }
-  .osd .bar { height: .8vh; }
+  .osd h2 { font-size: 2.8vw; margin: 0 0 1.5vh; font-weight: 400; }
+  .osd .bar { height: .8vh; background: rgba(255,255,255,.15); border-radius: 99px; overflow: hidden; }
+  .osd .bar i { display: block; height: 100%; background: #f6c26b; }
   .osd .row { margin-top: 1.2vh; font-size: 1.5vw; color: rgba(243,237,228,.75); }
 </style>
 </head>
 <body>
-<div class="safe">
-  <div class="head">
-    <div class="kicker">4 · Movies</div>
-    <h1 id="h">Movies</h1>
-    <div class="dim" id="folder"></div>
-  </div>
-  <div id="list"></div>
-  <div id="pv"><div class="img" id="pvImg"></div></div>
-</div>
-<div class="hint" id="hint">▲▼ choose · OK play · ◀ ▶ folder · 0 menu</div>
+<div id="bd"></div><div class="veil"></div>
+<div class="hero"><div class="k" id="hk"></div><h1 class="serif" id="ht"></h1><div class="st" id="hs"></div><div class="bar" id="hb" style="display:none"><i id="hbi"></i></div><div class="fold" id="folder"></div></div>
+<div id="hp"></div>
+<div id="shelves"></div>
+<div class="hint" id="hint" style="top:3.5vh;bottom:auto">◀ ▶ browse · ▲▼ shelves · OK play · 0 menu</div>
 
 <div id="play">
   <video id="v" preload="auto"></video>
   <div class="osd off" id="osd">
-    <h2 id="ptitle"></h2>
+    <h2 class="serif" id="ptitle"></h2>
     <div class="bar"><i id="pbar" style="width:0"></i></div>
     <div class="row"><span class="mono" id="ptime"></span><span class="grow"></span><span>OK pause · ◀ 10s · ▶ 30s · ↩ list</span></div>
   </div>
@@ -58,7 +76,7 @@
 
 <script src="/room.js"></script>
 <script>
-var list = [], sel = 0, first = 0, ROWS = 7, cur = null, osdT = null, lastSave = 0, waiting = {};
+var list = [], sel = 0, cur = null, osdT = null, lastSave = 0, waiting = {};
 var v = document.getElementById('v');
 
 function clock(s) {
@@ -74,56 +92,79 @@ function load() {
     var keep = list[sel] && list[sel].id;
     list = r.movies;
     document.getElementById('folder').textContent = r.folder;
-    list.forEach(function (m, i) { if (m.id === keep) sel = i; });
-    sel = Math.min(sel, Math.max(0, list.length - 1));
+    build();
+    if (keep) shelves.forEach(function (sh, ri) { sh.items.forEach(function (li, ci) { if (list[li].id === keep) { row = ri; cols[ri] = ci; } }); });
+    var h = /r=(\d+)&c=(\d+)/.exec(location.hash);  // #r=1&c=3 opens a shelf at a title
+    if (h && !keep) { row = +h[1]; cols[row] = +h[2]; }
+    row = Math.min(row, Math.max(0, shelves.length - 1));
     draw(r);
   });
 }
 
+// Shelves: Continue watching, Films, then each show and course, in the server's order.
+var shelves = [], row = 0, cols = {};
+function groupOf(m) { return started(m) ? 'Continue watching' : m.group; }
+function groupName(m) { return started(m) ? 'Continue watching' : m.group_name; }
+function build() {
+  var by = {};
+  shelves = [];
+  list.forEach(function (m, i) {
+    var g = groupOf(m);
+    if (!by[g]) { by[g] = { name: groupName(m), items: [] }; shelves.push(by[g]); }
+    by[g].items.push(i);
+  });
+}
+function status(m) {
+  if (m.cloud) return waiting[m.id] ? '<b>Downloading from iCloud…</b>' : '<b>In iCloud</b> · OK brings it down first';
+  if (started(m)) return '<b>Resume at ' + clock(m.t) + '</b> of ' + clock(m.duration);
+  if (m.duration && m.t >= m.duration - 120) return 'Watched';
+  return '<b>Plays now</b>' + (m.plays ? '' : ' · the TV may not play this format');
+}
+// an episode with no art reads "S1 · E04" over its name, not "Season 1, Episode 04 - ..." cut off mid-word
+function npTitle(t) {
+  var e = /Season\s*(\d+),?\s*Episode\s*(\d+)\s*[-–:.]?\s*(.*)/i.exec(t);
+  return e ? '<span class="ep">S' + (+e[1]) + ' · E' + e[2] + '</span>' + esc(e[3] || 'Episode ' + (+e[2])) : esc(t);
+}
+function card(m, on) {
+  var pct = started(m) ? Math.round(100 * m.t / m.duration) : 0;
+  return '<div class="card' + (m.poster ? '' : ' np') + (on ? ' sel' : '') + '"' + (m.poster ? ' style="background-image:url(' + m.poster + ')"' : '') + '>' +
+    (m.poster ? '' : '<div class="ttl">' + npTitle(m.title) + '</div>') + (m.cloud ? '' : '<span class="cl">▶ Ready</span>') +
+    (pct ? '<div class="pip"><i style="width:' + pct + '%"></i></div>' : '') + '</div>';
+}
 function draw(r) {
-  var el = document.getElementById('list');
+  var el = document.getElementById('shelves');
   if (!list.length) {
     el.innerHTML = '<div class="empty">' + (r && r.missing
       ? 'There\'s no folder at <b>' + esc(r.folder) + '</b> yet. Make one in iCloud Drive and put movies in it, or pick another folder from the Room menu on the Mac.'
       : 'No movies in <b>' + esc(r ? r.folder : '') + '</b> yet. MP4, M4V, MOV and WebM files play best.') + '</div>';
     return;
   }
-  if (sel < first) first = sel;
-  if (sel >= first + ROWS) first = sel - ROWS + 1;
-  el.innerHTML = list.slice(first, first + ROWS).map(function (m, j) {
-    var i = first + j, bits = [];
-    if (m.cloud) bits.push(waiting[m.id] ? '<b>Downloading from iCloud…</b>' : '<b>In iCloud</b> · OK downloads it');
-    else if (started(m)) bits.push('<b>Resume at ' + clock(m.t) + '</b> of ' + clock(m.duration));
-    else if (m.duration && m.t >= m.duration - 120) bits.push('Watched');
-    if (!m.plays) bits.push('The TV may not play this format');
-    return '<div class="m' + (i === sel ? ' sel' : '') + '">' + (m.poster ? '<div class="th" style="background-image:url(' + m.poster + ')"></div>' : '') +
-      '<div class="t">' + esc(m.title) + '</div>' +
-      '<div class="s">' + (bits.join(' · ') || '&nbsp;') + '</div>' +
-      (started(m) ? '<div class="bar"><i style="width:' + Math.round(100 * m.t / m.duration) + '%"></i></div>' : '') + '</div>';
-  }).join('');
-  var s = list[sel];  // the selected title's artwork, large, beside the list
-  document.getElementById('pvImg').style.backgroundImage = s && s.poster ? 'url(' + s.poster + ')' : 'none';
-  var g = groupOf(list[sel]), n = list.filter(function (m) { return groupOf(m) === g; }).length;
-  document.getElementById('h').textContent = groupName(list[sel]) + ' · ' + n;
-}
-
-function move(d) { if (!list.length) return; sel = Math.max(0, Math.min(list.length - 1, sel + d)); draw(); }
-
-// ◀ ▶ jump to the start of the previous or next group (Continue, Films, then each series).
-function groupOf(m) { return started(m) ? 'Continue watching' : m.group; }
-function groupName(m) { return started(m) ? 'Continue watching' : m.group_name; }
-function jump(d) {
-  if (!list.length) return;
-  var g = groupOf(list[sel]), i = sel;
-  if (d > 0) { while (i < list.length - 1 && groupOf(list[i]) === g) i++; }
-  else {
-    while (i > 0 && groupOf(list[i - 1]) === g) i--;           // start of this group
-    if (i === sel && i > 0) { i--; g = groupOf(list[i]); while (i > 0 && groupOf(list[i - 1]) === g) i--; }
+  var sh = shelves[row], col = Math.min(cols[row] || 0, sh.items.length - 1);
+  cols[row] = col;
+  sel = sh.items[col];
+  var m = list[sel];
+  // the hero: the selected title over its own poster, blurred
+  document.getElementById('bd').style.backgroundImage = m.poster ? 'url(' + m.poster + ')' : 'none';
+  document.getElementById('hp').style.backgroundImage = m.poster ? 'url(' + m.poster + ')' : 'none';
+  document.getElementById('hk').textContent = sh.name + ' · ' + (col + 1) + ' of ' + sh.items.length;
+  document.getElementById('ht').textContent = m.title;
+  document.getElementById('hs').innerHTML = status(m);
+  document.getElementById('hb').style.display = started(m) ? '' : 'none';
+  document.getElementById('hbi').style.width = started(m) ? Math.round(100 * m.t / m.duration) + '%' : '0';
+  // this shelf, scrolled so the selection stays in view, and the next one peeking underneath
+  var html = '', shift = Math.max(0, col - 2) * 10.5;
+  html += '<div class="shelf"><div class="name">' + esc(sh.name) + '<span>' + sh.items.length + '</span></div><div class="strip" style="-webkit-transform:translateX(-' + shift + 'vw);transform:translateX(-' + shift + 'vw)">' +
+    sh.items.slice(Math.max(0, col - 12), col + 14).map(function (li) { return card(list[li], li === sel); }).join('') + '</div></div>';
+  if (shelves[row + 1]) {
+    var nx = shelves[row + 1];
+    html += '<div class="shelf next"><div class="name">' + esc(nx.name) + '<span>' + nx.items.length + '</span></div><div class="strip">' +
+      nx.items.slice(0, 14).map(function (li) { return card(list[li], false); }).join('') + '</div></div>';
   }
-  sel = i; first = i;  // put the group's first title at the top
-  draw();
-  Room.toast(groupName(list[sel]), 1500);
+  el.innerHTML = html;
 }
+
+function move(d) { if (!list.length) return; cols[row] = Math.max(0, Math.min(shelves[row].items.length - 1, (cols[row] || 0) + d)); draw(); }
+function jump(d) { if (!list.length) return; row = Math.max(0, Math.min(shelves.length - 1, row + d)); draw(); }
 
 function choose(id) {
   var m = null;
@@ -218,10 +259,10 @@ function act(k, c) {
     else return false;
     return;
   }
-  if (k === 'down') move(1);
-  else if (k === 'up') move(-1);
-  else if (k === 'right') jump(1);
-  else if (k === 'left') jump(-1);
+  if (k === 'down') jump(1);
+  else if (k === 'up') jump(-1);
+  else if (k === 'right') move(1);
+  else if (k === 'left') move(-1);
   else if (k === 'enter' || k === 'play' || k === 'playpause') choose();
   else if (k === 'back') location.href = '/';
   else return false;

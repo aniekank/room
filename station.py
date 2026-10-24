@@ -864,6 +864,25 @@ def keep_shelf(log=print):
     threading.Thread(target=_keep_shelf, args=(log,), daemon=True).start()
 
 
+def art_for(item):
+    """A picture for what's on: a film's or show's poster, a record cover, the segment's own art, or the logo."""
+    import art
+    k = item.get('kind')
+    if k == 'video':
+        m = next((x for x in movies.scan()['movies'] if x['id'] == item.get('id')), None)
+        if m and art.for_movie(m):
+            return art.for_movie(m)
+    if k == 'crates' and item.get('records'):
+        return (item['records'][0].get('img') or '').replace('ab67616d00004851', 'ab67616d0000b273')
+    if k == 'queenpin' and item.get('slides'):
+        return '/station/kit/' + item['slides'][1 if len(item['slides']) > 1 else 0]['img']
+    if k == 'tapes' and item.get('slides'):
+        return '/station/kit/' + next((x for x in item['slides'] if '/drive/' in x), item['slides'][0])
+    if k in ('vault', 'recording'):
+        return '/station/kit/art/flyboyradio-01.png'
+    return '/station/kit/art/logo.png'
+
+
 def actual_duration(uid, dur):
     """The TV knows a video's real length once it loads; correct the schedule with it."""
     with _lock:

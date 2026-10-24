@@ -88,6 +88,46 @@ def _export_saves():
     (DATA / 'Dig Saves.md').write_text('\n'.join(lines) + '\n')
 
 
+def _any_clip():
+    """A clip from Dig Tube's pool for the home tile, without counting it as played (dig.pick() would)."""
+    import random
+    clips = list(dig.load()['clips'].values())
+    return random.choice(clips)['id'] if clips else ''
+
+
+def home_summary():
+    """Everything the home screen shows, in one request: what's on FlyBoy[TV] (with art), today's city, the latest
+    Dig clip, the Keys streak and a few posters for Movies."""
+    out = {'practice': practice_summary()}
+    try:
+        n = station.now()
+        it = n['item']
+        out['station'] = {'title': it['title'], 'kind': it['kind'], 'show': it.get('show', ''), 'art': station.art_for(it),
+                          'progress': round(n['offset'] / max(1, it['dur']), 3), 'daypart': n['daypart'],
+                          'next': next((x['title'] for x in n['next'] if x['kind'] != 'ident'), '')}
+    except Exception:
+        out['station'] = None
+    try:
+        cid = sources.DAY_CITY[datetime.now().weekday()]
+        c = sources.city_payload(cid)
+        out['city'] = {'name': c['name'], 'tz': c['tz'], 'weather': c.get('weather'),
+                       'view': (c.get('views') or [{}])[0].get('id', '')}
+    except Exception:
+        out['city'] = None
+    saves = _jsonl('dig_saves.jsonl')
+    out['dig'] = {'saves': len(saves), 'last': saves[-1] if saves else None,
+                  'clip': saves[-1]['id'] if saves else _any_clip()}
+    try:
+        import art
+        ms = movies.scan()['movies']
+        started = [m for m in ms if 0 < m['t'] < m['duration'] - 120]
+        posters = [art.for_movie(m) for m in started + ms]
+        out['movies'] = {'count': len(ms), 'continue': len(started), 'posters': [p for p in dict.fromkeys(posters) if p][:6]}
+    except Exception:
+        out['movies'] = {'count': 0, 'continue': 0, 'posters': []}
+    return out
+
+
 def qr_svg(text):
     try:
         import qrcode
@@ -236,6 +276,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(station.fetch_status())
         elif p == '/api/convert':
             return self._json(convert.status())
+        elif p == '/api/home':
+            return self._json(home_summary())
         elif p == '/api/station/library':
             return self._json(station.library())
         elif p == '/api/station/now':

@@ -6,66 +6,148 @@
 <title>Room</title>
 <link rel="stylesheet" href="/room.css">
 <style>
-  body { background: radial-gradient(ellipse at 70% 10%, #1f2a3a 0%, #0d0b10 65%); }
-  .brand { font-size: 1.4vw; letter-spacing: .5em; text-transform: uppercase; color: rgba(243,237,228,.6); }
-  .now { font-size: 6vw; font-weight: 800; letter-spacing: -0.03em; margin-top: 1vh; }
-  .tiles { position: absolute; left: 4vw; right: 4vw; bottom: 10vh; }
-  .tile { display: block; -webkit-flex: 1; flex: 1; margin-right: 2vw; height: 38vh; padding: 3vh 2vw; box-sizing: border-box;
-    border-radius: 1.4vw; background: rgba(255,255,255,.06); color: #f3ede4; text-decoration: none; outline: none;
-    border: 0.35vw solid transparent; -webkit-transition: all .2s; transition: all .2s; position: relative; }
+  /* the room takes its colour from whatever FlyBoy[TV] is showing */
+  #amb { position: absolute; left: -10%; top: -10%; width: 120%; height: 120%; background: #1a1622 center/cover no-repeat;
+    -webkit-filter: blur(6vw) saturate(1.3) brightness(.55); filter: blur(6vw) saturate(1.3) brightness(.55); -webkit-transition: background-image 1.2s; transition: background-image 1.2s; }
+  .veil { position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+    background: -webkit-linear-gradient(top, rgba(11,10,15,.25), rgba(11,10,15,.55) 45%, rgba(11,10,15,.92));
+    background: linear-gradient(to bottom, rgba(11,10,15,.25), rgba(11,10,15,.55) 45%, rgba(11,10,15,.92)); }
+
+  .top { position: absolute; left: 5vw; right: 5vw; top: 6vh; }
+  .brand { font-size: 1.1vw; letter-spacing: .55em; text-transform: uppercase; color: rgba(243,237,228,.6); font-weight: 600; }
+  .clock { font-size: 9.5vw; line-height: .95; margin-top: 1.2vh; }
+  .date { font-size: 1.7vw; color: rgba(243,237,228,.75); margin-top: .8vh; }
+  .wx { position: absolute; right: 0; top: 0; text-align: right; }
+  .wx .t { font-size: 4.2vw; }
+  .wx .c { font-size: 1.4vw; color: rgba(243,237,228,.7); }
+  .wx .phone { font-size: 1.05vw; color: rgba(243,237,228,.45); margin-top: 1.6vh; }
+
+  .tiles { position: absolute; left: 5vw; right: 5vw; bottom: 9vh; height: 40vh; }
+  .tile { position: relative; height: 100%; margin-right: 1.6vw; border-radius: 1.2vw; overflow: hidden; outline: none;
+    background: #1a1622 center/cover no-repeat; text-decoration: none; color: #f3ede4;
+    box-shadow: 0 1.5vh 3vh rgba(0,0,0,.35); -webkit-transform-origin: 50% 100%; transform-origin: 50% 100%; }
   .tile:last-child { margin-right: 0; }
-  .tile:focus, .tile.sel { border-color: #f6c26b; background: rgba(246,194,107,.12); -webkit-transform: scale(1.03); transform: scale(1.03); }
-  .tile .n { font-size: 1.4vw; color: #f6c26b; font-weight: 700; }
-  .tile h2 { font-size: 2.1vw; margin: 1.5vh 0 1vh; white-space: nowrap; }
-  .tile p { font-size: 1.25vw; line-height: 1.35; color: rgba(243,237,228,.7); margin: 0; }
-  .tile .foot { position: absolute; left: 2vw; bottom: 3vh; font-size: 1.4vw; color: rgba(243,237,228,.55); }
-  .tile .foot b { color: #f6c26b; }
+  .tile.wide { -webkit-flex: 2.3; flex: 2.3; }
+  .tile.std { -webkit-flex: 1; flex: 1; }
+  .tile .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 75%;
+    background: -webkit-linear-gradient(top, rgba(0,0,0,0), rgba(8,7,11,.92)); background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(8,7,11,.92)); }
+  .tile .body { position: absolute; left: 1.6vw; right: 1.6vw; bottom: 2.4vh; z-index: 5; }
+  .tile .shade { z-index: 4; }
+  .tile .num { z-index: 5; }
+  .tile .num { position: absolute; left: 1.4vw; top: 1.8vh; font-size: 1.05vw; font-weight: 700; letter-spacing: .1em;
+    background: rgba(11,10,15,.55); padding: .5vh .7vw; border-radius: 99px; color: rgba(243,237,228,.85); }
+  .tile .k { font-size: 1vw; letter-spacing: .25em; text-transform: uppercase; color: #f6c26b; font-weight: 700; }
+  .tile h2 { margin: .7vh 0 0; font-size: 2.6vw; line-height: 1; }
+  .tile.wide h2 { font-size: 3.4vw; }
+  .tile p { margin: .9vh 0 0; font-size: 1.15vw; line-height: 1.35; color: rgba(243,237,228,.72); max-height: 2.7em; overflow: hidden; }
+  .tile.wide p { white-space: nowrap; text-overflow: ellipsis; }
+  .tile .bar { height: .5vh; background: rgba(255,255,255,.18); border-radius: 99px; margin-top: 1.4vh; overflow: hidden; }
+  .tile .bar i { display: block; height: 100%; background: #f6c26b; }
+  .tile.sel { -webkit-transform: translateY(-1.4vh) scale(1.04); transform: translateY(-1.4vh) scale(1.04);
+    box-shadow: 0 0 0 .3vw #f6c26b, 0 3vh 6vh rgba(0,0,0,.6); }
+
+  /* Movies: a fan of posters */
+  .fan { position: absolute; left: 0; right: 0; top: 3vh; height: 52%; }
+  .fan i { position: absolute; top: 0; width: 42%; height: 100%; background: #222 center/cover no-repeat; border-radius: .6vw;
+    box-shadow: 0 1vh 2vh rgba(0,0,0,.5); }
+  .fan i:nth-child(1) { left: 6%; -webkit-transform: rotate(-9deg); transform: rotate(-9deg); }
+  .fan i:nth-child(2) { left: 29%; z-index: 2; top: -1vh; }
+  .fan i:nth-child(3) { left: 52%; -webkit-transform: rotate(9deg); transform: rotate(9deg); }
+
+  /* Keys: the streak, big */
+  .keys { background: -webkit-linear-gradient(135deg, #3a2a55, #12101a); background: linear-gradient(135deg, #3a2a55, #12101a); }
+  .keys .big { position: absolute; left: 0; right: 0; top: 4.5vh; text-align: center; font-size: 7vw; line-height: 1; }
+  .keys .ivory { position: absolute; left: 12%; right: 12%; top: 15vh; height: 3.2vh; background:
+    -webkit-repeating-linear-gradient(left, #f3ede4 0, #f3ede4 9%, rgba(0,0,0,.6) 9%, rgba(0,0,0,.6) 10%);
+    background: repeating-linear-gradient(to right, #f3ede4 0, #f3ede4 9%, rgba(0,0,0,.6) 9%, rgba(0,0,0,.6) 10%); border-radius: .3vw; opacity: .25; }
+
+  .foot { position: absolute; left: 5vw; right: 5vw; bottom: 3vh; font-size: 1.05vw; color: rgba(243,237,228,.42); }
 </style>
 </head>
 <body>
-<div class="safe">
+<div id="amb"></div><div class="veil"></div>
+<div class="top">
   <div class="brand">Room</div>
-  <div class="now mono" id="now"></div>
-  <div class="dim" style="font-size:1.6vw" id="phone"></div>
+  <div class="clock serif" id="clock"></div>
+  <div class="date" id="date"></div>
+  <div class="wx"><div class="t serif" id="wxT"></div><div class="c" id="wxC"></div><div class="phone" id="phone"></div></div>
 </div>
+
 <div class="row tiles">
-  <a class="tile" href="/station" id="t5"><div class="n">5</div><h2><img src="/station/kit/art/logo.png" alt="" style="height:5.2vh;vertical-align:middle;margin-right:.6vw">FlyBoy[TV]</h2><p>Your own channel, always on.</p><div class="foot" id="onair"></div></a>
-  <a class="tile" href="/nag" id="t1"><div class="n">1</div><h2>Keys</h2><p>Today's grip, a play-along loop, a new key every 90 seconds. Twenty minutes.</p><div class="foot" id="streak"></div></a>
-  <a class="tile" href="/dig" id="t2"><div class="n">2</div><h2>Dig Tube</h2><p>Soul Train, Afrobeat TV, city pop, library records. Hit OK to save the moment.</p><div class="foot" id="saves"></div></a>
-  <a class="tile" href="/window" id="t3"><div class="n">3</div><h2>World Window</h2><p>A street, a station and the local time in a city that shaped the music.</p><div class="foot" id="today"></div></a>
-  <a class="tile" href="/movies" id="t4"><div class="n">4</div><h2>Movies</h2><p>Your own films from iCloud Drive, picking up where you left off.</p><div class="foot" id="films"></div></a>
+  <a class="tile wide ease" href="/station" id="t5"><div class="shade"></div><span class="num">5</span>
+    <div class="body"><div class="k" id="stK">On now · FlyBoy[TV]</div><h2 class="serif" id="stT">FlyBoy[TV]</h2><p id="stN"></p><div class="bar"><i id="stBar" style="width:0"></i></div></div></a>
+  <a class="tile std ease" href="/movies" id="t4"><div class="fan" id="fan"></div><div class="shade"></div><span class="num">4</span>
+    <div class="body"><div class="k">Movies</div><h2 class="serif">Your films</h2><p id="mvP"></p></div></a>
+  <a class="tile std ease" href="/dig" id="t2"><div class="shade"></div><span class="num">2</span>
+    <div class="body"><div class="k">Dig Tube</div><h2 class="serif">The archive</h2><p id="dgP"></p></div></a>
+  <a class="tile std ease" href="/window" id="t3"><div class="shade"></div><span class="num">3</span>
+    <div class="body"><div class="k">World Window</div><h2 class="serif" id="wwT">Today</h2><p id="wwP"></p></div></a>
+  <a class="tile std ease keys" href="/nag" id="t1"><div class="big serif" id="kStreak">0</div><div class="ivory"></div><div class="shade"></div><span class="num">1</span>
+    <div class="body"><div class="k">Keys</div><h2 class="serif">Twenty minutes</h2><p id="kP"></p></div></a>
 </div>
+<div class="foot row"><span class="grow">◀ ▶ choose · OK open · 1–5 jump to a channel</span><span id="hint"></span></div>
+
 <script src="/room.js"></script>
 <script>
-var tiles = ['t5', 't1', 't2', 't3', 't4'], sel = 0;
-function focus() { tiles.forEach(function (id, i) { document.getElementById(id).className = 'tile' + (i === sel ? ' sel' : ''); }); document.getElementById(tiles[sel]).focus(); }
+var tiles = ['t5', 't4', 't2', 't3', 't1'], sel = 0;
+var WX = { 0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast', 45: 'fog', 48: 'fog', 51: 'drizzle', 53: 'drizzle', 55: 'drizzle',
+  61: 'rain', 63: 'rain', 65: 'heavy rain', 71: 'snow', 73: 'snow', 75: 'heavy snow', 80: 'showers', 81: 'showers', 82: 'storms', 95: 'thunderstorms' };
+function $(id) { return document.getElementById(id); }
+function bg(id, url) { if (url) $(id).style.backgroundImage = 'url("' + url + '")'; }
+function focus() {
+  tiles.forEach(function (id, i) { var el = $(id); el.className = el.className.replace(/ sel/g, '') + (i === sel ? ' sel' : ''); });
+  $(tiles[sel]).focus();
+}
 Room.keys(function (k) {
   if (k === 'right') { sel = Math.min(tiles.length - 1, sel + 1); focus(); }
   else if (k === 'left') { sel = Math.max(0, sel - 1); focus(); }
-  else if (k === 'enter') location.href = document.getElementById(tiles[sel]).getAttribute('href');
+  else if (k === 'enter') location.href = $(tiles[sel]).getAttribute('href');
   else return false;
 });
 Room.poll(function () {});
 Room.report(function () { return { channel: 'home' }; });
-function clock() { var d = new Date(); document.getElementById('now').textContent = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+
+function clock() {
+  var d = new Date();
+  $('clock').textContent = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(' AM', '').replace(' PM', '');
+  $('date').textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + (d.getHours() < 12 ? ' · morning' : d.getHours() < 18 ? ' · afternoon' : ' · evening');
+}
 setInterval(clock, 1000); clock();
-document.getElementById('phone').textContent = 'Phone remote: ' + location.host + '/remote';
-Room.get('/api/state').then(function (s) {
-  var p = s.practice;
-  document.getElementById('streak').innerHTML = p.today ? '<b>Done today</b> · ' + p.streak + '-day streak' : (p.streak ? p.streak + '-day streak · <b>not yet today</b>' : '<b>Start a streak</b>');
-  document.getElementById('saves').innerHTML = s.saves.length ? '<b>' + s.saves.length + '</b> recent saves' : 'Nothing saved yet';
-});
-Room.get('/api/cities').then(function (r) {
-  var c = r.cities.filter(function (x) { return x.id === r.today; })[0];
-  document.getElementById('today').innerHTML = 'Today: <b>' + (c ? c.name : '') + '</b>';
-});
-Room.get('/api/station/now').then(function (r) {
-  document.getElementById('onair').innerHTML = 'On now: <b>' + r.item.title.replace(/</g, '&lt;').slice(0, 40) + '</b>';
-});
-Room.get('/api/movies').then(function (r) {
-  var half = r.movies.filter(function (m) { return m.t > 0 && m.duration && m.t < m.duration - 120; }).length;
-  document.getElementById('films').innerHTML = half ? '<b>' + half + '</b> to finish' : r.movies.length ? '<b>' + r.movies.length + '</b> movies' : 'Add some to iCloud Drive';
-});
+$('phone').textContent = 'Phone remote · ' + location.host + '/remote';
+
+function load() {
+  Room.get('/api/home').then(function (h) {
+    var s = h.station;
+    if (s) {
+      bg('t5', s.art); bg('amb', s.art);
+      $('stK').textContent = 'On now · ' + s.daypart;
+      $('stT').textContent = s.title;
+      $('stN').textContent = s.next ? 'Next: ' + s.next : (s.show || '');
+      $('stBar').style.width = Math.round(100 * s.progress) + '%';
+    }
+    var m = h.movies || {};
+    $('fan').innerHTML = (m.posters || []).slice(0, 3).map(function (p) { return '<i style="background-image:url(' + p + ')"></i>'; }).join('');
+    $('mvP').textContent = m.count + ' titles' + (m['continue'] ? ' · ' + m['continue'] + ' to finish' : '');
+    var d = h.dig || {};
+    if (d.clip) bg('t2', 'https://i.ytimg.com/vi/' + d.clip + '/mqdefault.jpg');  // 16:9, no letterbox bars
+    $('dgP').textContent = d.last ? 'Last save: ' + d.last.title : 'Soul Train to city pop, 43 lanes';
+    var c = h.city;
+    if (c) {
+      if (c.view) bg('t3', 'https://i.ytimg.com/vi/' + c.view + '/mqdefault.jpg');
+      $('wwT').textContent = c.name;
+      var w = c.weather;
+      var local = '';
+      try { local = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: c.tz }).format(new Date()); } catch (e) {}
+      $('wwP').textContent = (local ? local + ' there' : '') + (w ? ' · ' + w.temp + '°' + w.unit : '');
+      if (w) { $('wxT').textContent = w.temp + '°'; $('wxC').textContent = c.name + ' · ' + (WX[w.code] || '') + (w.day ? '' : ' tonight'); }
+    }
+    var p = h.practice || {};
+    $('kStreak').textContent = p.streak || 0;
+    $('kP').textContent = p.today ? 'Done today · ' + p.streak + '-day streak' : (p.streak ? p.streak + '-day streak · not yet today' : 'Start a streak today');
+  });
+}
+load();
+setInterval(load, 60000);
 focus();
 </script>
 </body>
