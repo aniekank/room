@@ -433,7 +433,8 @@ def _fetcher():
             ready = time.time() >= _fetch['until']
             job = min(_fetch['want'].items(), key=lambda kv: kv[1][0]) if ready and _fetch['want'] else None
         if not job:
-            time.sleep(5)
+            if ready and not _grow_crates_pool():
+                time.sleep(5)
             continue
         key, (_, vids) = job
         name = ''
@@ -457,6 +458,25 @@ def _fetcher():
                 INDEX.write_text(json.dumps(idx))
             _prune_tracks()
         time.sleep(20)
+
+
+CRATES_POOL = 40
+
+
+def _grow_crates_pool():
+    """Idle: queue one more Crates record so there are always songs ready on the Mac. Returns whether it queued one."""
+    recs = crates()
+    have = sum(1 for r in recs if cached(r))
+    if have >= CRATES_POOL or shutil.disk_usage(HOME).free < 6e9:
+        return False
+    for r in random.sample(recs, min(8, len(recs))):
+        if not cached(r):
+            t = dict(r)
+            t['all'] = _yt(f"{t['artist']} {t['title']}", embeddable=False)
+            if t['all']:
+                want(t, 10000)  # behind anything a segment is waiting for
+                return True
+    return False
 
 
 def fetch_status():
@@ -585,15 +605,17 @@ def pick(kind, st, rng, ref=None):
             return None
         rng.shuffle(tracks)
         tracks = lead_with_cached(tracks[:6])
-        return {'kind': 'vault', 'title': f"FlyBoyRadio Vault · {s['label']}", 'date': s['date'], 'label': s['label'],
+        return {'kind': 'vault', 'beats': some_beats(rng, 1), 'title': f"FlyBoyRadio Vault · {s['label']}", 'date': s['date'], 'label': s['label'],
                 'all': [f"{t['artist']}: {t['title']}" for t in s['tracks']][:24], 'tracks': tracks[:6], 'per': 100,
                 'dur': 100 * min(6, len(tracks))}
     if kind == 'crates':
         recs = crates()
         if not recs:
             return None
-        picks = lead_with_cached([dict(r) for r in rng.sample(recs, min(3, len(recs)))])
-        return {'kind': 'crates', 'title': 'From the Crates', 'records': picks, 'per': 75, 'dur': 75 * len(picks)}
+        ready = [r for r in recs if cached(r)]  # records whose songs are already on the Mac play from the first second
+        picks = rng.sample(ready, 3) if len(ready) >= 3 else ready + rng.sample([r for r in recs if r not in ready], 3 - len(ready))
+        picks = lead_with_cached([dict(r) for r in picks])
+        return {'kind': 'crates', 'title': 'From the Crates', 'records': picks, 'beats': some_beats(rng, 1), 'per': 75, 'dur': 75 * len(picks)}
     if kind == 'yourday':  # one of your beats underneath
         return {'kind': 'yourday', 'title': 'Your Day', 'dur': SEG_LEN['yourday'], 'beats': some_beats(rng, 1)}
     if kind == 'tapes':

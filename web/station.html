@@ -361,14 +361,14 @@ function beat(b, at, vol) {
 
 // a segment that steps through YouTube tracks: which one is on depends on how far into the segment we are
 function tracks(it, list, show) {
-  var per = it.per || 90, last = -1;
+  var per = it.per || 90, last = -1, beatOn = false;
   function at() {
     var e = elapsed(), i = Math.min(list.length - 1, Math.floor(e / per)), r = list[i];
     if (i === last) return;
     last = i;
     show(r, i);
     if (r.media) {  // the song from the Mac, as a music video when there is one: plays on any TV, embeds or not
-      ytStop();
+      ytStop(); beatOn = false;
       var isVideo = /\.mp4$/.test(r.media), el = isVideo ? mv : a, from = 30 + Math.floor(e - i * per);
       document.body.className = 'k-' + it.kind + (isVideo ? '' : ' local');
       $('ytbox').className = isVideo ? 'on mv' : '';
@@ -383,26 +383,24 @@ function tracks(it, list, show) {
       el.play();
       return;
     }
-    r.alt = 0;
-    ytNext = function () {  // refused on this TV: on to the next upload of the same song
-      var vids = r.vids || [];
-      Room.post('/api/station/blocked', { id: vids[r.alt] || r.vid });
-      r.alt++;
-      if (vids[r.alt]) ytPlay(vids[r.alt], 30 + Math.floor(elapsed() - i * per), 100);
-      else $('ytbox').className = '';
-    };
-    if (r.vids && r.vids.length) ytPlay(r.vids[0], 30 + Math.floor(e - i * per), 100);
-    else if (r.vid) ytPlay(r.vid, 30 + Math.floor(e - i * per), 100);
-    if (!r.media && (r.tries = (r.tries || 0) + 1) <= 40) {  // still coming down to the Mac: check back shortly
+    // Not on the Mac yet. (The TV's YouTube player refuses nearly all label uploads, and retrying it is what stuttered.)
+    // One of your beats plays under the card while the song comes down; it takes over the moment it's here.
+    ytStop(); mv.pause(); $('ytbox').className = '';
+    document.body.className = 'k-' + it.kind + ' local';
+    if (it.beats && it.beats[0] && !beatOn) { beat(it.beats[0], e, 0.7); a.loop = true; beatOn = true; }
+    var mine = i;
+    (function check(n) {
+      if (n > 30) return;
       setTimeout(function () {
-        Room.get('/api/station/now').then(function (n) {
-          if (cur !== it || n.item.uid !== it.uid) return;
-          var fresh = n.item.tracks || n.item.records || [];
-          for (var j = 0; j < list.length && j < fresh.length; j++) { list[j].vid = fresh[j].vid; list[j].vids = fresh[j].vids; list[j].media = fresh[j].media; }
-          last = -1;
+        if (cur !== it || last !== mine) return;
+        Room.get('/api/station/now').then(function (now) {
+          if (cur !== it || last !== mine || now.item.uid !== it.uid) return;
+          var fresh = (now.item.tracks || now.item.records || [])[mine];
+          if (fresh && fresh.media) { list[mine].media = fresh.media; last = -1; beatOn = false; }  // here: switch to it
+          else check(n + 1);
         });
       }, 4000);
-    }
+    })(0);
   }
   at();
   tick = setInterval(at, 1000);
