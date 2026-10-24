@@ -426,6 +426,9 @@ def want(t, priority):
 def _fetcher():
     """One song at a time, a pause between, and a long break when YouTube pushes back: bursts are what get a Mac flagged."""
     while True:
+        if shutil.disk_usage(HOME).free < 4e9:  # a full disk stops Room answering the TV: leave the space alone
+            time.sleep(300)
+            continue
         with _flock:
             ready = time.time() >= _fetch['until']
             job = min(_fetch['want'].items(), key=lambda kv: kv[1][0]) if ready and _fetch['want'] else None

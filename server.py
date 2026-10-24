@@ -6,6 +6,7 @@ the TV side to plain fetch() so the 2018-19 Tizen browser can run it.
 import json
 import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -203,6 +204,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({'cmds': cmds, 'now': time.time()})
         elif p == '/api/state':
             return self._json({'tv': _tv_state, 'tv_online': time.time() - _tv_seen < 5,
+                               'disk_free_gb': round(shutil.disk_usage(Path.home()).free / 1e9, 1),
                                'practice': practice_summary(), 'saves': _jsonl('dig_saves.jsonl')[-12:][::-1]})
         elif p == '/api/city':
             return self._json(sources.city_payload(q.get('id') or sources.DAY_CITY[datetime.now().weekday()]))
