@@ -722,7 +722,7 @@ def _air(st, item):
 
 def _finished(item):
     """After airing: give back the space for anything the station downloaded."""
-    if item.get('kind') == 'video' and item.get('fetched'):
+    if item.get('kind') == 'video' and (item.get('fetched') or item.get('id') in _load().get('shelf', [])):
         subprocess.Popen(['brctl', 'evict', str(HOME / item['id'])], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -772,8 +772,96 @@ def now():
     for it in q:
         nexts.append({'title': it['title'], 'show': it.get('show', ''), 'kind': it['kind'], 'start': s})
         s += it['dur']
-    return {'now': t, 'item': cur, 'offset': t - cur['start'], 'next': nexts,
+    waiting = None  # something you asked for, still coming down from iCloud
+    if q and q[0].get('asked') and q[0]['kind'] == 'video' and not _item_ready(q[0]):
+        waiting = {'title': q[0]['title'], 'pct': icloud_progress(HOME / q[0]['id']), 'on_power': on_power()}
+    return {'now': t, 'item': cur, 'offset': t - cur['start'], 'next': nexts, 'waiting': waiting,
             'daypart': daypart(t)[1], 'ends': cur['start'] + cur['dur']}
+
+
+_brctl = {'at': 0, 'text': ''}
+
+
+def icloud_progress(path):
+    """How far iCloud has got bringing a file down, 0-100, or None if it isn't downloading. brctl's status hides names
+    but shows each item's exact size in bytes, which matches the placeholder's."""
+    p = Path(path)
+    try:
+        size = plistlib.loads((p.parent / f'.{p.name}.icloud').read_bytes()).get('NSURLFileSizeKey')
+    except (OSError, ValueError):
+        return 100 if p.is_file() else None
+    if time.time() - _brctl['at'] > 8:
+        try:
+            out = subprocess.run(['brctl', 'status', 'com.apple.CloudDocs'], capture_output=True, text=True, timeout=20).stdout
+            _brctl.update(at=time.time(), text=re.sub(r'\x1b\[[0-9;]*m', '', out))
+        except subprocess.SubprocessError:
+            return None
+    lines, seen = _brctl['text'].splitlines(), False
+    for i, line in enumerate(lines):  # an item shows up more than once; the entry with the downloader has the percentage
+        if f'({size})' in line:
+            seen = True
+            m = re.search(r'downloading:([0-9.]+)%', ' '.join(lines[i:i + 3]))
+            if m:
+                return round(float(m.group(1)))
+    return 0 if seen else None
+
+
+def on_power():
+    try:
+        return "'AC Power'" in subprocess.run(['pmset', '-g', 'batt'], capture_output=True, text=True, timeout=5).stdout
+    except subprocess.SubprocessError:
+        return True
+
+
+SHELF_MAX = 6
+
+
+def pick_waiting():
+    """Is something you asked for still coming down? Then nothing else should compete for a slow connection."""
+    q = _load().get('queue', [])
+    return bool(q and q[0].get('asked') and q[0]['kind'] == 'video' and not _item_ready(q[0]))
+
+
+def _keep_shelf(log):
+    """While the Mac is on power and has room: the next episode of each show and a couple of films come down ahead, so
+    On Demand has things that play the moment you pick them. iCloud crawls on battery, so this waits for the charger."""
+    rng = random.Random()
+    while True:
+        try:
+            if on_power() and not pick_waiting():
+                with _lock:
+                    st = _load()
+                shelf = [i for i in st.get('shelf', []) if (HOME / i).exists() or (HOME / i).parent.joinpath(f'.{Path(i).name}.icloud').exists()]
+                lib = [m for m in movies.scan()['movies'] if m['plays']]
+                want_ids = []
+                for name, eps in sorted(_shows_of(lib, 'series').items()):
+                    want_ids.append(eps[st.get('next_ep', {}).get(name, 0) % len(eps)]['id'])
+                films = [m for m in lib if m['group'] == 'Films' and time.time() - st.get('aired', {}).get(m['id'], 0) > 30 * 86400]
+                want_ids += [m['id'] for m in rng.sample(films, min(2, len(films)))]
+                coming = [i for i in shelf if not _ready(i)]
+                for mid in want_ids:
+                    if len(shelf) >= SHELF_MAX or coming:  # one at a time: on a slow connection, several at once each crawl
+                        break
+                    if mid in shelf or _ready(mid):
+                        continue
+                    size = _cloud_size({'id': mid}) or 3e9
+                    if shutil.disk_usage(HOME).free - size < 6e9:  # always leave 6 GB: a full disk stops the TV
+                        break
+                    subprocess.Popen(['brctl', 'download', str(HOME / mid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    shelf.append(mid)
+                    coming.append(mid)
+                    log(f'station: shelf: bringing down {Path(mid).name}')
+                with _lock:
+                    st = _load()
+                    st['shelf'] = shelf
+                    _save(st)
+        except Exception as e:
+            log(f'station: shelf: {e}')
+        time.sleep(600)
+
+
+def keep_shelf(log=print):
+    threading.Thread(target=_keep_shelf, args=(log,), daemon=True).start()
 
 
 def actual_duration(uid, dur):
@@ -858,12 +946,16 @@ def library():
             ('crates', 'From the Crates', 'Three records from the digging list'),
             ('yourday', 'Your Day', 'Calendar, to-dos, notes, Keys and weather'),
             ('recording', 'FlyBoyRadio, live on WMUC', 'The 6 Feb 2011 show, all three hours')]
+    def ready_first(rows):  # what's already on the Mac plays the moment you pick it, so it goes on top
+        for r in rows:
+            r['sub'] = ('▶ plays now · ' if r['ready'] else 'downloads from iCloud first · ') + r.get('sub', '')
+        return sorted(rows, key=lambda r: not r['ready'])
     return {
         'segments': [{'kind': k, 'title': t, 'sub': d} for k, t, d in segs if k != 'recording' or settings.get('station_recording')] +
                     [{'kind': 'promo', 'ref': p, 'title': _promo_title(p), 'sub': 'Promo'} for p in kit_files('promos', '*.mp4')],
-        'series': [dict(x, kind='series') for x in runs('series')],
-        'academy': [dict(x, kind='course') for x in runs('course')],
-        'films': [dict(x, kind='film', sub='on the Mac' if x['ready'] else 'in iCloud') for x in films],
+        'series': ready_first([dict(x, kind='series') for x in runs('series')]),
+        'academy': ready_first([dict(x, kind='course') for x in runs('course')]),
+        'films': ready_first([dict(x, kind='film', sub='') for x in films]),
         'vault': [{'kind': 'vault', 'ref': v['date'], 'title': v['label'], 'sub': f"{len(v['tracks'])} tracks"} for v in shows()],
     }
 

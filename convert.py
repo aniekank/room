@@ -167,6 +167,13 @@ def run(log=print, stop=None, once=False):
         return
     while not (stop and stop.is_set()):
         st = _load()
+        try:
+            import station
+            if station.pick_waiting():  # something you asked for is coming down: don't split the connection with it
+                time.sleep(120)
+                continue
+        except Exception:
+            pass
         free = shutil.disk_usage(movies.HOME).free
         job = next(((p, s, m) for p, s, m in todo() if s * 2 + MARGIN < free), None)
         if not job:

@@ -336,6 +336,7 @@ def serve(port=PORT, warm=True):
     dig.keep_fresh(log)
     convert.start(log)  # only when convert_videos is on
     station.warm_beats(log)
+    station.keep_shelf(log)
     httpd = ThreadingHTTPServer(('0.0.0.0', port), Handler)
     print(f'Room serving on :{port}', flush=True)
     httpd.serve_forever()

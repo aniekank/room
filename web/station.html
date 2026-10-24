@@ -112,6 +112,15 @@
   .od .it .s { font-size: 1.35vw; color: rgba(241,238,230,.55); margin-top: .3vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .od .more { font-size: 1.3vw; color: rgba(241,238,230,.4); margin-top: 1.5vh; }
 
+  /* your pick, coming down from iCloud */
+  .wait { position: absolute; right: 3vw; top: 11vh; max-width: 42vw; background: rgba(11,11,10,.88); padding: 1.2vh 1.6vw 1.4vh 2vw; display: none; }
+  .wait.on { display: block; }
+  .wait:before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: .5vw; background: #e9ff42; }
+  .wait .t { font-size: 2vw; margin-top: .6vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wait .c { font-size: 1.3vw; margin-top: .4vh; }
+  .wait .bar { height: .6vh; background: rgba(241,238,230,.15); margin-top: 1vh; }
+  .wait .bar i { display: block; height: 100%; background: #e9ff42; width: 0; -webkit-transition: width 1s; transition: width 1s; }
+
   /* lower third, as in the promos */
   .lt { position: absolute; left: 3vw; bottom: 6vh; background: rgba(11,11,10,.9); padding: 1.6vh 2vw 1.8vh 2.4vw; max-width: 70vw;
     -webkit-transition: opacity .5s, -webkit-transform .5s; transition: opacity .5s, transform .5s; opacity: 0; -webkit-transform: translateX(-2vw); transform: translateX(-2vw); }
@@ -141,6 +150,7 @@
   <div id="ytbox"><div id="yt"></div><video id="mv" preload="auto"></video></div>
 </div>
 <div class="lt" id="lt"><span class="tag ab" id="ltTag">Now</span><div class="t ab cream" id="ltTitle"></div><div class="c cn yel" id="ltCredit"></div></div>
+<div class="wait" id="wait"><span class="tag ab">Coming up</span><div class="t ab cream" id="waitT"></div><div class="c cn yel" id="waitC"></div><div class="bar"><i id="waitBar"></i></div></div>
 <div class="bug ab"><img class="buglogo" src="/station/kit/art/logo.png" alt=""><b>FLYBOY</b>[TV] · <span class="cn" id="clock"></span></div>
 <div class="guide" id="guide"><div class="card"><span class="tag ab">On FlyBoy[TV]</span><div class="mid ab cream" id="gPart" style="margin:1.4vh 0 3vh"></div><div id="gList"></div></div></div>
 <div class="od" id="od"><div class="card"><span class="tag ab">On demand</span><div class="mid ab cream" style="margin-top:1.2vh">Put anything on</div>
@@ -174,6 +184,7 @@ function tune() {
   Room.get('/api/station/now').then(function (r) {
     cur = r.item; nexts = r.next; off0 = r.offset; t0 = Date.now();
     $('gPart').textContent = r.daypart;
+    showWait(r.waiting);
     stop();
     document.body.className = 'k-' + cur.kind;
     (SHOW[cur.kind] || SHOW.ident)(cur);
@@ -194,6 +205,24 @@ function stop() {
 }
 
 function next() { Room.post('/api/station/skip').then(tune); }
+
+// Your pick is still coming down from iCloud: say so, and how far it's got, until it starts.
+var waitT = null;
+function showWait(w) {
+  clearInterval(waitT);
+  if (!w) { $('wait').className = 'wait'; return; }
+  function draw(w) {
+    $('waitT').textContent = w.title;
+    $('waitC').textContent = w.pct != null && w.pct > 0 ? 'Downloading from iCloud · ' + w.pct + '%' :
+      'Waiting for iCloud' + (w.on_power ? '' : ' · plug the Mac in to speed this up');
+    $('waitBar').style.width = (w.pct || 0) + '%';
+    $('wait').className = 'wait on';
+  }
+  draw(w);
+  waitT = setInterval(function () {
+    Room.get('/api/station/now').then(function (r) { if (r.waiting) draw(r.waiting); else { clearInterval(waitT); $('wait').className = 'wait'; } });
+  }, 10000);
+}
 
 // ------------------------------------------------------------ YouTube for segments
 
