@@ -216,6 +216,8 @@ def scan():
         with _lock:
             _cache.update(key=key, at=time.time(), files=files)
     seen = _read()
+    import ready
+    kept = {k for k, v in ready._load()['files'].items() if (ready.DIR / v).is_file()}
     out, have = [], set()
     # The same film twice (two folders, or an MKV and the MP4 made from it): keep one the TV plays, on the Mac if possible.
     for f in sorted(files, key=lambda f: (not f['plays'], f['cloud'])):
@@ -224,6 +226,8 @@ def scan():
             continue
         have.add(same)
         mem = seen.get(f['id'], {})
+        if f['id'] in kept:  # a 720p copy is on the Mac (ready.py): it plays now
+            f = dict(f, cloud=False, plays=True)
         out.append(dict(f, t=mem.get('t', 0), duration=mem.get('duration', 0), watched=mem.get('at', '')))
     # A folder with one video is just that film's folder: those go together under Films.
     per_dir = {}
@@ -267,6 +271,9 @@ def _inside(p):
 def path(movie_id):
     """The file for an id, or None. Refuses anything outside your movie folders."""
     p = HOME / movie_id
+    import ready
+    if _inside(p) and ready.path(movie_id):
+        return ready.path(movie_id).resolve()
     if not _inside(p) or not p.is_file() or p.suffix.lower() not in VIDEO:
         return None
     return p.resolve()

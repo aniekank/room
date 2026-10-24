@@ -292,10 +292,10 @@ var SHOW = {
 
   crates: function (it) {
     tracks(it, it.records, function (r, i) {
-      card('crates', '<div class="head"><span class="tag ab">From the Crates</span><div class="credit cn yel">The digging list · ' + (i + 1) + ' of ' + it.records.length + '</div></div>' +
+      card('crates', '<div class="head"><span class="tag ab">From the Crates</span><div class="credit cn yel">' + esc(r.crate || 'The digging list') + ' · ' + (i + 1) + ' of ' + it.records.length + '</div></div>' +
         '<div class="cover" style="background-image:url(' + esc(r.img).replace('ab67616d00004851', 'ab67616d0000b273') + ')"></div>' +
         '<div class="info"><div class="rec ab cream">' + esc(r.title) + '</div><div class="ab yel" style="font-size:2.2vw;margin-top:1vh">' + esc(r.artist) + '</div>' +
-        '<div class="meta cn cream">' + [r.year, r.fmt, r.cond].filter(Boolean).map(esc).join(' · ') + '<br>' +
+        '<div class="meta cn cream">' + [r.year, r.lane, r.fmt, r.cond].filter(Boolean).map(esc).join(' · ') + '<br>' +
         (r.seller ? esc(r.seller) + "'s crate" + (r.price ? ' · $' + esc(r.price) : '') : '') + (r.notes ? '<br><span class="yel">' + esc(r.notes) + '</span>' : '') + '</div></div>');
     });
   },

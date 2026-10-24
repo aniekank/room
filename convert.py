@@ -169,7 +169,8 @@ def run(log=print, stop=None, once=False):
         st = _load()
         try:
             import station
-            if station.pick_waiting():  # something you asked for is coming down: don't split the connection with it
+            import ready
+            if station.pick_waiting() or ready.busy():  # something you asked for is coming down: don't split the connection with it
                 time.sleep(120)
                 continue
         except Exception:

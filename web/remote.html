@@ -48,6 +48,13 @@
   .cities button { padding: 10px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 15px; }
   .cities button.on { border-color: var(--gold); color: var(--gold); }
   .dim { color: var(--dim); }
+  .list a { position: relative; padding-right: 52px; min-height: 54px; }
+  .list a img { float: left; }
+  .list a::after { content: ''; display: block; clear: both; }
+  .star { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line);
+    background: transparent; color: var(--dim); font-size: 20px; }
+  .star.on { color: #1a1220; background: var(--gold); border-color: var(--gold); }
+  .readyline { font-size: 13px; color: var(--dim); margin-top: 6px; }
   .hide { display: none; }
   .msg { font-size: 13px; color: var(--dim); margin-top: 8px; min-height: 18px; }
 </style>
@@ -108,6 +115,7 @@
   </div>
   <div class="kicker" style="margin-top:16px">On demand</div>
   <div class="cities" id="odShelves"></div>
+  <div class="readyline" id="odReady"></div>
   <div class="list" id="odList" style="margin-top:8px"></div>
 </section>
 
@@ -121,7 +129,7 @@
     </div>
     <button class="wide" data-do="list">Back to the list</button>
   </div>
-  <div class="card"><div class="kicker" id="movFolder">Your movies</div><div class="list" id="movList"></div></div>
+  <div class="card"><div class="kicker" id="movFolder">Your movies</div><div class="readyline" id="movReady"></div><div class="list" id="movList"></div></div>
 </section>
 
 <div class="card hide" id="disk" style="border:1px solid #e2584c"><div class="kicker" style="color:#e2584c">Mac disk almost full</div>
@@ -159,8 +167,11 @@ function drawShelf() {
   $('odShelves').innerHTML = SHELVES.map(([k, t]) => `<button data-shelf="${k}" class="${k === shelf ? 'on' : ''}">${t}</button>`).join('');
   $('odShelves').querySelectorAll('button').forEach(b => b.onclick = () => { shelf = b.dataset.shelf; drawShelf(); });
   const items = (lib && lib[shelf]) || [];
-  $('odList').innerHTML = items.map((x, i) => `<a href="#" data-i="${i}">${x.poster ? `<img src="${x.poster}" alt="">` : ''}${esc(x.title)} <span>· ${esc(x.sub || '')}</span></a>`).join('') || '<div class="dim" style="padding-top:8px">Nothing here yet.</div>';
-  $('odList').querySelectorAll('a').forEach(a => a.onclick = (e) => { e.preventDefault(); playNow(items[+a.dataset.i]); });
+  const films = shelf === 'films';
+  $('odList').innerHTML = items.map((x, i) => `<a href="#" data-i="${i}">${x.poster ? `<img src="${x.poster}" alt="">` : ''}${esc(x.title)} <span>· ${esc(x.sub || '')}</span>${films ? starBtn(x.ref) : ''}</a>`).join('') || '<div class="dim" style="padding-top:8px">Nothing here yet.</div>';
+  $('odList').querySelectorAll('a').forEach(a => a.onclick = (e) => { e.preventDefault(); if (!e.target.closest('.star')) playNow(items[+a.dataset.i]); });
+  $('odReady').textContent = films ? readyLine() : '';
+  wireStars($('odList'));
 }
 fetch('/api/station/library').then(r => r.json()).then(L => { lib = L; drawShelf(); });
 document.querySelectorAll('[data-ch2]').forEach(b => b.onclick = () => cmd({ go: '/' }));
@@ -183,6 +194,24 @@ const fmtT = (t) => Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
 const clock = (s) => { s = Math.floor(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+// Ready films: a few kept on the Mac as small copies so they play the moment you pick them. ☆ keeps one ready.
+let rd = { picks: [], ready: [], now: null, keep: 3 };
+const starBtn = (id) => `<button class="star ${rd.picks.includes(id) ? 'on' : ''}" data-star="${esc(id)}" aria-label="Keep ready">${rd.picks.includes(id) ? '★' : '☆'}</button>`;
+function readyLine() {
+  const n = rd.ready.length;
+  return `${n} film${n === 1 ? '' : 's'} ready to play` + (rd.now ? ` · getting ${rd.now.title} ready` : '') + ' · ☆ keeps one ready';
+}
+function wireStars(el) {
+  el.querySelectorAll('[data-star]').forEach(b => b.onclick = async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const id = b.dataset.star, keep = !rd.picks.includes(id);
+    rd = await post('/api/ready', { id, keep });
+    $('msg').textContent = keep ? 'Kept ready: it comes down and gets a small copy while the Mac is plugged in.' : 'No longer kept ready.';
+    drawShelf(); if (movieList) loadMovies();
+  });
+}
+const loadReady = () => fetch('/api/ready').then(r => r.json()).then(r => { rd = r; if (shelf === 'films') drawShelf(); });
+loadReady(); setInterval(loadReady, 30000);
 let movieList = 0, posters = {}, stArt = '', stArtAt = 0;
 function art(name, url) {
   const c = $(name + 'Cover'), g = $(name + 'Glow');
@@ -199,9 +228,11 @@ async function loadMovies() {
   $('movFolder').textContent = r.folder;
   r.movies.forEach(m => { if (m.poster) posters[m.id] = m.poster; });
   $('movList').innerHTML = r.movies.map(m => `<a href="#" data-id="${esc(m.id)}">${m.poster ? `<img src="${m.poster}" alt="">` : ''}${esc(m.title)} <span>${
-    m.cloud ? '· in iCloud' : m.t > 0 && m.duration && m.t < m.duration - 120 ? '· resume ' + clock(m.t) : ''}</span></a>`).join('')
+    m.cloud ? '· in iCloud' : m.t > 0 && m.duration && m.t < m.duration - 120 ? '· resume ' + clock(m.t) : ''}</span>${m.group === 'Films' ? starBtn(m.id) : ''}</a>`).join('')
     || '<div class="dim" style="padding-top:8px">No movies in that folder yet.</div>';
-  $('movList').querySelectorAll('a').forEach(a => a.onclick = (e) => { e.preventDefault(); cmd({ do: 'play', id: a.dataset.id }); });
+  $('movList').querySelectorAll('a').forEach(a => a.onclick = (e) => { e.preventDefault(); if (!e.target.closest('.star')) cmd({ do: 'play', id: a.dataset.id }); });
+  $('movReady').textContent = readyLine();
+  wireStars($('movList'));
 }
 
 async function refresh() {

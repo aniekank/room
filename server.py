@@ -20,6 +20,7 @@ import convert
 import dig
 import movies
 import personal
+import ready
 import settings
 import sources
 import station
@@ -247,6 +248,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({'tv': _tv_state, 'tv_online': time.time() - _tv_seen < 5,
                                'disk_free_gb': round(shutil.disk_usage(Path.home()).free / 1e9, 1),
                                'practice': practice_summary(), 'saves': _jsonl('dig_saves.jsonl')[-12:][::-1]})
+        elif p == '/api/ready':  # the films kept on the Mac
+            return self._json(ready.status())
         elif p == '/api/city':
             return self._json(sources.city_payload(q.get('id') or sources.DAY_CITY[datetime.now().weekday()]))
         elif p == '/api/cities':
@@ -364,6 +367,9 @@ class Handler(SimpleHTTPRequestHandler):
             if body.get('id') and body.get('duration'):
                 movies.remember(body['id'], body.get('t', 0), body['duration'])
             return self._json({'ok': True})
+        if p == '/api/ready':  # from the phone: keep a film ready, or stop
+            ready.pick(body.get('id', ''), bool(body.get('keep', True)))
+            return self._json(ready.status())
         if p == '/api/movies/fetch':  # download an iCloud placeholder
             return self._json({'ok': movies.fetch(body.get('id', ''))})
         if p == '/api/dig/bad':  # embed refused; never offer it again
@@ -384,7 +390,10 @@ def serve(port=PORT, warm=True):
     convert.start(log)  # only when convert_videos is on
     station.warm_beats(log)
     station.keep_shelf(log)
+    import funk
+    funk.start([r['artist'] for r in station.crates()], log)
     art.start(log)
+    ready.start(log)
     httpd = ThreadingHTTPServer(('0.0.0.0', port), Handler)
     print(f'Room serving on :{port}', flush=True)
     httpd.serve_forever()

@@ -35,12 +35,12 @@ _lock = threading.Lock()
 
 DAYPARTS = [  # (from hour, name, what airs, weighted)
     (2, 'Overnight', {'tapes': 4, 'vault': 2, 'crates': 2}),
-    (6, 'Morning', {'yourday': 2, 'series': 5, 'crates': 1, 'tapes': 1}),
-    (10, 'Daytime', {'series': 5, 'crates': 2, 'vault': 1, 'tapes': 1}),
+    (6, 'Morning', {'yourday': 2, 'series': 4, 'crates': 2, 'tapes': 1}),
+    (10, 'Daytime', {'series': 4, 'crates': 3, 'vault': 1, 'tapes': 1}),
     (13, 'FlyBoy Academy', {'course': 5, 'crates': 1, 'tapes': 1}),
-    (16, 'Afternoon', {'series': 5, 'vault': 1, 'promo': 1, 'queenpin': 1}),
+    (16, 'Afternoon', {'series': 4, 'crates': 2, 'vault': 1, 'promo': 1, 'queenpin': 1}),
     (19, 'Prime Time', {'queenpin': 1, 'film': 5, 'series': 1, 'promo': 1}),
-    (23, 'Late Night', {'tapes': 2, 'vault': 3, 'recording': 1, 'film': 2, 'queenpin': 1}),
+    (23, 'Late Night', {'tapes': 2, 'vault': 3, 'crates': 2, 'recording': 1, 'film': 2, 'queenpin': 1}),
 ]
 LEAD = {'yourday', 'queenpin'}  # what opens a daypart before anything else: Your Day at 6am, Queenpin at 4pm, 7pm and 11pm
 SEG_LEN = {'ident': 7, 'yourday': 80, 'vault': 6 * 100, 'crates': 3 * 75, 'tapes': 3 * 90, 'queenpin': 75}
@@ -304,7 +304,58 @@ def crates():
         except (ValueError, KeyError):
             recs = []
         _crates = [r for r in recs if r.get('img') and r.get('artist') and r.get('title')]
-    return _crates
+    import funk
+    return _crates + funk.records()  # the funk crate grows as its covers are found
+
+
+AIRED = DATA / 'crates_aired.json'  # record key -> [last aired, times aired]: what's been on, so it waits its turn
+FRESH_FOR = 4 * 86400  # a record aired in the last four days stays off unless everything else has been on
+
+
+def _aired():
+    try:
+        return json.loads(AIRED.read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def _mark_aired(recs):
+    with _lock:
+        a = _aired()
+        for r in recs:
+            last, n = a.get(_key(r), [0, 0])
+            a[_key(r)] = [time.time(), n + 1]
+        AIRED.write_text(json.dumps(a))
+
+
+def _weighted(rng, recs, n, weight):
+    """n records drawn by weight, no artist twice."""
+    pool, out, seen = list(recs), [], set()
+    while pool and len(out) < n:
+        w = [weight(r) for r in pool]
+        if not sum(w):
+            break
+        r = rng.choices(pool, w)[0]
+        pool.remove(r)
+        if r['artist'].lower() not in seen:
+            seen.add(r['artist'].lower())
+            out.append(r)
+    return out
+
+
+def crates_picks(rng, n=3):
+    """Records for a Crates segment: ones not aired lately, funkier ones far likelier, songs already on the Mac first."""
+    import funk
+    recs, aired, now = crates(), _aired(), time.time()
+    fresh = lambda r: now - aired.get(_key(r), [0, 0])[0] > FRESH_FOR
+    w = lambda r: funk.score(r) ** 2 / (1 + aired.get(_key(r), [0, 0])[1])  # each airing halves, thirds... its chances
+    ready = [r for r in recs if cached(r) and fresh(r)]
+    picks = _weighted(rng, ready, n, w)
+    if len(picks) < n:  # not enough on the Mac yet: the rest come down while a beat plays
+        rest = [r for r in recs if fresh(r) and r not in picks and r['artist'].lower() not in {p['artist'].lower() for p in picks}]
+        picks += _weighted(rng, rest or [r for r in recs if r not in picks], n - len(picks), w)
+    _mark_aired(picks)
+    return picks
 
 
 # ---------------------------------------------------------------- YouTube for segments
@@ -369,7 +420,10 @@ def tracks_cap():
 
 
 def _prune_tracks():
-    files = sorted((p for p in TRACKS.glob('*') if p.name != 'index.json'), key=lambda p: p.stat().st_mtime)
+    aired, by_file = _aired(), {v: k for k, v in _index().items()}
+    # records that have already aired go first, then the oldest downloads
+    files = sorted((p for p in TRACKS.glob('*') if p.name != 'index.json'),
+                   key=lambda p: (by_file.get(p.name) not in aired, p.stat().st_mtime))
     total, cap = sum(p.stat().st_size for p in files), tracks_cap()
     while files and total > cap:
         p = files.pop(0)
@@ -460,16 +514,26 @@ def _fetcher():
         time.sleep(20)
 
 
-CRATES_POOL = 40
+CRATES_POOL = 25  # unaired records on the Mac; about 600 MB of music videos
 
 
 def _grow_crates_pool():
     """Idle: queue one more Crates record so there are always songs ready on the Mac. Returns whether it queued one."""
-    recs = crates()
-    have = sum(1 for r in recs if cached(r))
-    if have >= CRATES_POOL or shutil.disk_usage(HOME).free < 6e9:
+    import funk
+    recs, aired, now = crates(), _aired(), time.time()
+    have = [r for r in recs if cached(r)]
+    unplayed = [r for r in have if now - aired.get(_key(r), [0, 0])[0] > FRESH_FOR]
+    if len(unplayed) >= CRATES_POOL:
         return False
-    for r in random.sample(recs, min(8, len(recs))):
+    if len(have) >= CRATES_POOL or shutil.disk_usage(HOME).free < 6e9:
+        # full: let the record aired longest ago go, so the pool keeps turning over without using more disk
+        gone = [r for r in have if r not in unplayed]
+        if not gone or shutil.disk_usage(HOME).free < 4.5e9:
+            return False
+        old = min(gone, key=lambda r: aired[_key(r)][0])
+        track_path(cached(old)).unlink(missing_ok=True)
+    fresh = [r for r in recs if not cached(r) and now - aired.get(_key(r), [0, 0])[0] > FRESH_FOR and _key(r) not in _fetch['want']]
+    for r in _weighted(random, fresh, 8, lambda r: funk.score(r) ** 2 / (1 + aired.get(_key(r), [0, 0])[1])):
         if not cached(r):
             t = dict(r)
             t['all'] = _yt(f"{t['artist']} {t['title']}", embeddable=False)
@@ -522,7 +586,8 @@ def _estimate(m):
 
 
 def _ready(m_id):
-    return (HOME / m_id).is_file()
+    import ready
+    return (HOME / m_id).is_file() or bool(ready.path(m_id))
 
 
 def _video(m, st):
@@ -612,9 +677,7 @@ def pick(kind, st, rng, ref=None):
         recs = crates()
         if not recs:
             return None
-        ready = [r for r in recs if cached(r)]  # records whose songs are already on the Mac play from the first second
-        picks = rng.sample(ready, 3) if len(ready) >= 3 else ready + rng.sample([r for r in recs if r not in ready], 3 - len(ready))
-        picks = lead_with_cached([dict(r) for r in picks])
+        picks = lead_with_cached([dict(r) for r in crates_picks(rng)])
         return {'kind': 'crates', 'title': 'From the Crates', 'records': picks, 'beats': some_beats(rng, 1), 'per': 75, 'dur': 75 * len(picks)}
     if kind == 'yourday':  # one of your beats underneath
         return {'kind': 'yourday', 'title': 'Your Day', 'dur': SEG_LEN['yourday'], 'beats': some_beats(rng, 1)}
@@ -828,7 +891,8 @@ def _keep_shelf(log):
     rng = random.Random()
     while True:
         try:
-            if on_power() and not pick_waiting():
+            import ready
+            if on_power() and not pick_waiting() and not ready.busy():  # one thing on iCloud at a time
                 with _lock:
                     st = _load()
                 shelf = [i for i in st.get('shelf', []) if (HOME / i).exists() or (HOME / i).parent.joinpath(f'.{Path(i).name}.icloud').exists()]
@@ -836,8 +900,7 @@ def _keep_shelf(log):
                 want_ids = []
                 for name, eps in sorted(_shows_of(lib, 'series').items()):
                     want_ids.append(eps[st.get('next_ep', {}).get(name, 0) % len(eps)]['id'])
-                films = [m for m in lib if m['group'] == 'Films' and time.time() - st.get('aired', {}).get(m['id'], 0) > 30 * 86400]
-                want_ids += [m['id'] for m in rng.sample(films, min(2, len(films)))]
+                # films are ready.py's job now: small copies that fit the disk, not the full originals
                 coming = [i for i in shelf if not _ready(i)]
                 for mid in want_ids:
                     if len(shelf) >= SHELF_MAX or coming:  # one at a time: on a slow connection, several at once each crawl
