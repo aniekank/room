@@ -108,6 +108,10 @@ function groupName(m) { return started(m) ? 'Continue watching' : m.group_name; 
 function build() {
   var by = {};
   shelves = [];
+  // what's on the Mac comes first: it plays the moment you press OK
+  var now = [];
+  list.forEach(function (m, i) { if (!m.cloud && m.plays) now.push(i); });
+  if (now.length) shelves.push({ name: 'Ready to play', items: now });
   list.forEach(function (m, i) {
     var g = groupOf(m);
     if (!by[g]) { by[g] = { name: groupName(m), items: [] }; shelves.push(by[g]); }
@@ -115,7 +119,7 @@ function build() {
   });
 }
 function status(m) {
-  if (m.cloud) return waiting[m.id] ? '<b>Downloading from iCloud…</b>' : '<b>In iCloud</b> · OK brings it down first';
+  if (m.cloud) return waiting[m.id] ? '<b>Downloading from iCloud…</b>' : '<b>In iCloud</b> · OK brings it down first · ☆ it on the phone to keep it ready';
   if (started(m)) return '<b>Resume at ' + clock(m.t) + '</b> of ' + clock(m.duration);
   if (m.duration && m.t >= m.duration - 120) return 'Watched';
   return '<b>Plays now</b>' + (m.plays ? '' : ' · the TV may not play this format');

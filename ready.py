@@ -128,7 +128,8 @@ def _make(m, log):
     name = re.sub(r'[^a-z0-9]+', '-', m['title'].lower()).strip('-')[:60] + '.mp4'
     DIR.mkdir(exist_ok=True)
     if m['plays'] and p.stat().st_size <= (m.get('duration') or 7200) * BYTES_PER_SEC:  # already small and plays: keep it as is
-        shutil.copyfile(p, DIR / '.part.mp4')
+        # an APFS clone: shares the original's blocks, so it costs no space, and keeps them when iCloud lets the original go
+        subprocess.run(['cp', '-c', str(p), str(DIR / '.part.mp4')], check=True, capture_output=True, timeout=600)
         shutil.move(str(DIR / '.part.mp4'), str(DIR / name))
         if was_cloud or convert._icloud(p).get('uploaded'):
             subprocess.run(['brctl', 'evict', str(p)], capture_output=True, timeout=60)
@@ -161,6 +162,10 @@ def _make(m, log):
 def _worker(log):
     import station
     failed = {}
+    with _lock:  # a restart mid-copy leaves this behind
+        st = _load()
+        st['now'] = None
+        _save(st)
     while True:
         try:
             films = _films()
