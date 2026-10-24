@@ -111,6 +111,8 @@
   .od .it.sel .t { color: #e9ff42; }
   .od .it .s { font-size: 1.35vw; color: rgba(241,238,230,.55); margin-top: .3vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .od .more { font-size: 1.3vw; color: rgba(241,238,230,.4); margin-top: 1.5vh; }
+  .od .card { right: 34vw; }
+  .od .pv { position: absolute; right: 5vw; top: 14vh; width: 25vw; height: 66vh; background: center/contain no-repeat; }
 
   /* your pick, coming down from iCloud */
   .wait { position: absolute; right: 3vw; top: 11vh; max-width: 42vw; background: rgba(11,11,10,.88); padding: 1.2vh 1.6vw 1.4vh 2vw; display: none; }
@@ -153,7 +155,7 @@
 <div class="wait" id="wait"><span class="tag ab">Coming up</span><div class="t ab cream" id="waitT"></div><div class="c cn yel" id="waitC"></div><div class="bar"><i id="waitBar"></i></div></div>
 <div class="bug ab"><img class="buglogo" src="/station/kit/art/logo.png" alt=""><b>FLYBOY</b>[TV] · <span class="cn" id="clock"></span></div>
 <div class="guide" id="guide"><div class="card"><span class="tag ab">On FlyBoy[TV]</span><div class="mid ab cream" id="gPart" style="margin:1.4vh 0 3vh"></div><div id="gList"></div></div></div>
-<div class="od" id="od"><div class="card"><span class="tag ab">On demand</span><div class="mid ab cream" style="margin-top:1.2vh">Put anything on</div>
+<div class="od" id="od"><div class="pv" id="odPv"></div><div class="card"><span class="tag ab">On demand</span><div class="mid ab cream" style="margin-top:1.2vh">Put anything on</div>
   <div class="tabs ab" id="odTabs"></div><div id="odList"></div><div class="more cn" id="odMore"></div></div></div>
 <audio id="a"></audio>
 <div class="hint">OK guide · ▲ on demand · ▶ next program · 0 menu</div>
@@ -515,6 +517,8 @@ function odDraw() {
   $('odList').innerHTML = list.slice(top, top + ROWS_OD).map(function (x, j) {
     return '<div class="it' + (top + j === sel ? ' sel' : '') + '"><div class="t ab">' + esc(x.title) + '</div><div class="s cn">' + esc(x.sub || '') + '</div></div>';
   }).join('') || '<div class="it"><div class="t ab">Nothing here yet</div></div>';
+  var x = list[sel];
+  $('odPv').style.backgroundImage = x && x.poster ? 'url(' + x.poster + ')' : 'none';
   $('odMore').textContent = list.length > ROWS_OD ? (sel + 1) + ' of ' + list.length + ' · ◀ ▶ shelves · OK puts it on · ↩ closes' : '◀ ▶ shelves · OK puts it on · ↩ closes';
 }
 function odKey(k) {

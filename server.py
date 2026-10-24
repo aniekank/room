@@ -15,6 +15,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import art
 import convert
 import dig
 import movies
@@ -224,7 +225,11 @@ class Handler(SimpleHTTPRequestHandler):
         elif p == '/api/practice':
             return self._json(practice_summary())
         elif p == '/api/movies':
-            return self._json(movies.scan())
+            r = movies.scan()
+            r['movies'] = [dict(m, poster=art.for_movie(m)) for m in r['movies']]
+            return self._json(r)
+        elif p.startswith('/poster/'):
+            return self._send_file(art.path(p[len('/poster/'):]))
         elif p == '/media':
             return self._media(q.get('id', ''))
         elif p == '/api/station/fetch':
@@ -337,6 +342,7 @@ def serve(port=PORT, warm=True):
     convert.start(log)  # only when convert_videos is on
     station.warm_beats(log)
     station.keep_shelf(log)
+    art.start(log)
     httpd = ThreadingHTTPServer(('0.0.0.0', port), Handler)
     print(f'Room serving on :{port}', flush=True)
     httpd.serve_forever()

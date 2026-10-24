@@ -14,6 +14,7 @@
   station_recording  "~/....mp3"  the archive FlyBoyRadio recording that airs late at night
   station_beats      "~/..."      where your beats are (default: the TASK Beats Backup in iCloud Drive)
   convert_videos     true         make MKV/AVI/MPG files playable: an MP4 is written next to each, in the background
+  poster_articles    {"Title": "Wikipedia article"}  which article a title's poster comes from (null: no poster)
   youtube_cookies_browser "chrome"  lets yt-dlp use your YouTube sign-in from that browser (chrome, safari, firefox...)
                                   when YouTube asks it to prove it isn't a bot; off unless you set it
   notion_token       "secret_..." your Notion integration key, for Your Day
@@ -46,6 +47,7 @@ DEFAULTS = {
     'station_beats': None,
     'convert_videos': False,
     'youtube_cookies_browser': None,
+    'poster_articles': {},
     'notion_token': None,
     'notion_tasks': None,
     'notion_notes': [],

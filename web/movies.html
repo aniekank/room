@@ -9,7 +9,11 @@
   body { background: radial-gradient(ellipse at 20% 0%, #2a1f2e 0%, #0d0b10 60%); }
   .head h1 { font-size: 4.4vw; font-weight: 800; letter-spacing: -0.03em; margin: 1vh 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .head .dim { font-size: 1.4vw; }
-  #list { position: absolute; left: 0; right: 0; top: 17vh; bottom: 6vh; overflow: hidden; }
+  #list { position: absolute; left: 0; right: 30vw; top: 17vh; bottom: 6vh; overflow: hidden; }
+  .m .th { float: left; width: 5.2vh; height: 7.8vh; margin: -.4vh 1.2vw -.4vh 0; background: #222 center/cover no-repeat; border-radius: .3vw; }
+  #pv { position: absolute; right: 0; top: 17vh; width: 27vw; bottom: 8vh; text-align: center; }
+  #pv .img { width: 100%; height: 64vh; background: center/contain no-repeat; }
+  #pv .cap { font-size: 1.4vw; color: rgba(243,237,228,.6); margin-top: 1.4vh; }
   .m { padding: 1.5vh 1.6vw; margin-bottom: 0.8vh; border-radius: 0.8vw; border: 0.3vw solid transparent; background: rgba(255,255,255,.04); }
   .m.sel { border-color: #f6c26b; background: rgba(246,194,107,.12); }
   .m .t { font-size: 2.2vw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -39,6 +43,7 @@
     <div class="dim" id="folder"></div>
   </div>
   <div id="list"></div>
+  <div id="pv"><div class="img" id="pvImg"></div></div>
 </div>
 <div class="hint" id="hint">▲▼ choose · OK play · ◀ ▶ folder · 0 menu</div>
 
@@ -91,10 +96,13 @@ function draw(r) {
     else if (started(m)) bits.push('<b>Resume at ' + clock(m.t) + '</b> of ' + clock(m.duration));
     else if (m.duration && m.t >= m.duration - 120) bits.push('Watched');
     if (!m.plays) bits.push('The TV may not play this format');
-    return '<div class="m' + (i === sel ? ' sel' : '') + '"><div class="t">' + esc(m.title) + '</div>' +
+    return '<div class="m' + (i === sel ? ' sel' : '') + '">' + (m.poster ? '<div class="th" style="background-image:url(' + m.poster + ')"></div>' : '') +
+      '<div class="t">' + esc(m.title) + '</div>' +
       '<div class="s">' + (bits.join(' · ') || '&nbsp;') + '</div>' +
       (started(m) ? '<div class="bar"><i style="width:' + Math.round(100 * m.t / m.duration) + '%"></i></div>' : '') + '</div>';
   }).join('');
+  var s = list[sel];  // the selected title's artwork, large, beside the list
+  document.getElementById('pvImg').style.backgroundImage = s && s.poster ? 'url(' + s.poster + ')' : 'none';
   var g = groupOf(list[sel]), n = list.filter(function (m) { return groupOf(m) === g; }).length;
   document.getElementById('h').textContent = groupName(list[sel]) + ' · ' + n;
 }

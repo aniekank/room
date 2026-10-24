@@ -935,11 +935,14 @@ def library():
         out = []
         for name, eps in sorted(_shows_of(lib, kind).items()):
             ep = eps[nxt.get(name, 0) % len(eps)]
+            import art
+            f = art.poster(name, 'show') if kind == 'series' else ''
             out.append({'ref': name, 'title': name, 'sub': f"Next: {ep['title']} · {len(eps)} episodes" if kind == 'series'
-                        else f"Next: {ep['title']} · {len(eps)} lessons", 'ready': _ready(ep['id'])})
+                        else f"Next: {ep['title']} · {len(eps)} lessons", 'ready': _ready(ep['id']), 'poster': f'/poster/{f}' if f else ''})
         return out
-    films = sorted(({'ref': m['id'], 'title': m['title'], 'ready': _ready(m['id'])} for m in lib if m['group'] == 'Films'),
-                   key=lambda f: f['title'].lower())
+    import art
+    films = sorted(({'ref': m['id'], 'title': m['title'], 'ready': _ready(m['id']), 'poster': art.for_movie(m)}
+                    for m in lib if m['group'] == 'Films'), key=lambda f: f['title'].lower())
     segs = [('queenpin', 'Queenpin: Era One', 'The cast, cut to one of your beats'),
             ('tapes', 'Ride With Me', 'Three beats over the night drive'),
             ('vault', 'FlyBoyRadio Vault', 'A show from this week of the year'),

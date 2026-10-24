@@ -29,6 +29,7 @@
   select { width: 100%; margin-top: 10px; padding: 12px; border-radius: 12px; background: #2a2431; color: var(--ink); border: 0; font-size: 16px; }
   .list a { display: block; padding: 10px 0; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; font-size: 14px; }
   .list a span { color: var(--dim); }
+  .list a img { width: 30px; height: 45px; object-fit: cover; border-radius: 4px; vertical-align: middle; margin-right: 10px; background: #2a2431; }
   .cities { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .cities button { padding: 10px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 15px; }
   .cities button.on { border-color: var(--gold); color: var(--gold); }
@@ -144,7 +145,7 @@ function drawShelf() {
   $('odShelves').innerHTML = SHELVES.map(([k, t]) => `<button data-shelf="${k}" class="${k === shelf ? 'on' : ''}">${t}</button>`).join('');
   $('odShelves').querySelectorAll('button').forEach(b => b.onclick = () => { shelf = b.dataset.shelf; drawShelf(); });
   const items = (lib && lib[shelf]) || [];
-  $('odList').innerHTML = items.map((x, i) => `<a href="#" data-i="${i}">${esc(x.title)} <span>· ${esc(x.sub || '')}</span></a>`).join('') || '<div class="dim" style="padding-top:8px">Nothing here yet.</div>';
+  $('odList').innerHTML = items.map((x, i) => `<a href="#" data-i="${i}">${x.poster ? `<img src="${x.poster}" alt="">` : ''}${esc(x.title)} <span>· ${esc(x.sub || '')}</span></a>`).join('') || '<div class="dim" style="padding-top:8px">Nothing here yet.</div>';
   $('odList').querySelectorAll('a').forEach(a => a.onclick = (e) => { e.preventDefault(); playNow(items[+a.dataset.i]); });
 }
 fetch('/api/station/library').then(r => r.json()).then(L => { lib = L; drawShelf(); });
@@ -173,7 +174,7 @@ let movieList = 0;
 async function loadMovies() {
   const r = await fetch('/api/movies').then(r => r.json());
   $('movFolder').textContent = r.folder;
-  $('movList').innerHTML = r.movies.map(m => `<a href="#" data-id="${esc(m.id)}">${esc(m.title)} <span>${
+  $('movList').innerHTML = r.movies.map(m => `<a href="#" data-id="${esc(m.id)}">${m.poster ? `<img src="${m.poster}" alt="">` : ''}${esc(m.title)} <span>${
     m.cloud ? '· in iCloud' : m.t > 0 && m.duration && m.t < m.duration - 120 ? '· resume ' + clock(m.t) : ''}</span></a>`).join('')
     || '<div class="dim" style="padding-top:8px">No movies in that folder yet.</div>';
   $('movList').querySelectorAll('a').forEach(a => a.onclick = (e) => { e.preventDefault(); cmd({ do: 'play', id: a.dataset.id }); });
