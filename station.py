@@ -267,12 +267,14 @@ def shows():
                    'label': line[4:].strip(), 'tracks': []}
             out.append(cur)
             continue
+        if cur and 'fill-in DJ' in line:  # someone else sat in that week: their playlist, not FlyBoyRadio
+            cur['fill_in'] = True
         t = re.match(r'^\d+\.\s+(.+?):\s+(.+?)(?:\s{2}_\((.*)\)_)?\s*$', line)
         if cur and t:
             artist, title, note = t.group(1).strip(), t.group(2).strip(), (t.group(3) or '').strip()
             own = 'T.A.S.K' in (artist + title + note)
             cur['tracks'].append({'artist': artist, 'title': title, 'note': note, 'own': own})
-    _shows = [s for s in out if s['tracks']]
+    _shows = [s for s in out if s['tracks'] and not s.get('fill_in')]
     return _shows
 
 
@@ -392,11 +394,20 @@ def _mv_lookup(t, details=True):
     import yt_dlp
     title = re.sub(r'\s*[\(\[].*?(remix|mix|edit|version|instrumental|dub).*?[\)\]]', '', t['title'], flags=re.I)
     hits = sources._yt_search(f"{t['artist'].split(' featuring ')[0]} {title} official music video", 8)
-    bad = ('lyric', 'audio', 'visualizer', 'visualiser', 'live', 'cover', 'reaction', 'karaoke', 'instrumental', '8d', 'slowed')
+    bad = ('lyric', 'visualizer', 'visualiser', 'live', 'cover', 'reaction', 'karaoke', 'instrumental', '8d', 'slowed')
     real = re.compile(r'(official|music)\s*(hd\s*|4k\s*)?video|[\(\[]video[\)\]]', re.I)  # a music video, not a song over a still
     flat = lambda x: re.sub(r'[^a-z0-9]+', ' ', x.lower().replace('&', 'and')).strip()
     name = flat(re.split(r'[\(\[]', title)[0])  # the song's own title has to be in the video's: search will offer another hit by the same artist
-    ok = [h for h in hits if not h['live'] and 120 <= (h['duration'] or 0) <= 600 and real.search(h['title'])
+    who = flat(re.split(r' featuring | feat\.? | ft\.? | & | and | x | with ', t['artist'], flags=re.I)[0]).replace(' ', '')
+
+    def official(h):  # posted by the artist: their own verified channel, or their VEVO. Anyone can title a fan edit "Official Video"
+        ch = flat(h['channel']).replace(' ', '')
+        return bool(who) and (who in ch or (ch and ch.replace('vevo', '') in who)) and (h['verified'] or ch.endswith('vevo'))
+    audio = re.compile(r'\b(audio|lyrics?|visuali[sz]er|art track)\b', re.I)
+
+    def video(h):  # said to be a video, or posted the way videos are ("Artist - Song"); album audio goes up as the bare song title
+        return bool(real.search(h['title'])) or (not audio.search(h['title']) and flat(h['title']).replace(' ', '').startswith(who))
+    ok = [h for h in hits if not h['live'] and 90 <= (h['duration'] or 0) <= 600 and video(h) and official(h)
           and not any(w in h['title'].lower() for w in bad) and name and f' {name} ' in f" {flat(h['title'])} "]
     ok.sort(key=lambda h: -h['views'])
     out = {'vids': [h['id'] for h in ok[:4]], 'len': ok[0]['duration'] if ok else 0, 'views': ok[0]['views'] if ok else 0,
