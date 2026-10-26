@@ -29,3 +29,8 @@ body {
 }
 .toast.show { opacity: 1; -webkit-transform: translate(-50%, 0); transform: translate(-50%, 0); }
 .hint { position: absolute; right: 4vw; bottom: 3vh; font-size: 1vw; color: rgba(243, 237, 228, 0.4); }
+
+/* subtitles over a film (Room.subs) */
+.subs { position: absolute; left: 8vw; right: 8vw; bottom: 9vh; text-align: center; pointer-events: none; z-index: 5; }
+.subs span { display: inline-block; background: rgba(0,0,0,.62); color: #fff; font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: 2.7vw; line-height: 1.3; padding: .5vh 1.2vw; border-radius: .4vw; text-shadow: 0 0 .3vw #000; }

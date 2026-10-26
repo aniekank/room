@@ -67,16 +67,17 @@
 
 <div id="play">
   <video id="v" preload="auto"></video>
+  <div id="sub"></div>
   <div class="osd off" id="osd">
     <h2 class="serif" id="ptitle"></h2>
     <div class="bar"><i id="pbar" style="width:0"></i></div>
-    <div class="row"><span class="mono" id="ptime"></span><span class="grow"></span><span>OK pause · ◀ 10s · ▶ 30s · ↩ list</span></div>
+    <div class="row"><span class="mono" id="ptime"></span><span class="grow"></span><span>OK pause · ◀ 10s · ▶ 30s · ▼ subtitles · ↩ list</span></div>
   </div>
 </div>
 
 <script src="/room.js"></script>
 <script>
-var list = [], sel = 0, cur = null, osdT = null, lastSave = 0, waiting = {};
+var list = [], sel = 0, cur = null, osdT = null, lastSave = 0, waiting = {}, sb = null;
 var v = document.getElementById('v');
 
 function clock(s) {
@@ -192,6 +193,8 @@ function play(m) {
   document.getElementById('hint').style.display = 'none';
   document.getElementById('ptitle').textContent = m.title;
   v.src = '/media?id=' + encodeURIComponent(m.id);
+  if (sb) sb.off();
+  sb = Room.subs(v, m.id, document.getElementById('sub'));
   var at = started(m) ? m.t - 5 : 0;
   v.addEventListener('loadedmetadata', function once() {
     v.removeEventListener('loadedmetadata', once);
@@ -214,6 +217,7 @@ function stop() {
   v.pause();
   v.removeAttribute('src');
   v.load();
+  if (sb) { sb.off(); sb = null; }
   cur = null;
   document.getElementById('play').className = '';
   document.getElementById('hint').style.display = '';
@@ -258,7 +262,8 @@ function act(k, c) {
     else if (k === 'left' || k === 'rw') seek(-10);
     else if (k === 'right' || k === 'ff') seek(30);
     else if (k === 'seek') seek(c && c.by || 0);
-    else if (k === 'up' || k === 'down' || k === 'info') osd(5000);
+    else if (k === 'down' || k === 'subs') { if (sb) sb.toggle(); osd(5000); }
+    else if (k === 'up' || k === 'info') osd(5000);
     else if (k === 'back' || k === 'stop' || k === 'list') stop();
     else return false;
     return;

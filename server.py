@@ -273,6 +273,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(r)
         elif p.startswith('/poster/'):
             return self._send_file(art.path(p[len('/poster/'):]))
+        elif p == '/api/subs':
+            import subs
+            return self._json(subs.get(q.get('id', '')))
         elif p == '/media':
             return self._media(q.get('id', ''))
         elif p == '/api/station/fetch':
@@ -351,6 +354,9 @@ class Handler(SimpleHTTPRequestHandler):
                    'minutes': int(body.get('minutes', 0)), 'set': body.get('set', '')}
             _jsonl_append('practice.jsonl', row)
             return self._json(practice_summary())
+        if p == '/api/subs':  # subtitles on or off for a film; the first time on, they're found
+            import subs
+            return self._json(subs.toggle(body.get('id', ''), body.get('on')))
         if p == '/api/station/dur':
             station.actual_duration(body.get('uid'), body.get('dur'))
             return self._json({'ok': True})

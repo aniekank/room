@@ -51,6 +51,7 @@ DEFAULTS = {
     'notion_token': None,
     'notion_tasks': None,
     'notion_notes': [],
+    'opensubtitles_key': None,  # free from opensubtitles.com: English subtitles for films, found on the first ▼
     'sports_follow': {},  # FlyBoy Sports: teams to lead each desk with, by desk (nfl, club, nba, nhl, mlb)
 }
 

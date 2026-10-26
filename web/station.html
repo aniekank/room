@@ -169,6 +169,7 @@
   <div id="seg"></div>
   <div id="ytbox"><div id="yt"></div><video id="mv" preload="auto"></video></div>
 </div>
+<div id="sub"></div>
 <div class="lt" id="lt"><span class="tag ab" id="ltTag">Now</span><div class="t ab cream" id="ltTitle"></div><div class="c cn yel" id="ltCredit"></div></div>
 <div class="wait" id="wait"><span class="tag ab">Coming up</span><div class="t ab cream" id="waitT"></div><div class="c cn yel" id="waitC"></div><div class="bar"><i id="waitBar"></i></div></div>
 <div class="bug ab"><img class="buglogo" src="/station/kit/art/logo.png" alt=""><b>FLYBOY</b>[TV] · <span class="cn" id="clock"></span></div>
@@ -176,11 +177,11 @@
 <div class="od" id="od"><div class="pv" id="odPv"></div><div class="card"><span class="tag ab">On demand</span><div class="mid ab cream" style="margin-top:1.2vh">Put anything on</div>
   <div class="tabs ab" id="odTabs"></div><div id="odList"></div><div class="more cn" id="odMore"></div></div></div>
 <audio id="a"></audio>
-<div class="hint">OK guide · ▲ on demand · ▶ next program · 0 menu</div>
+<div class="hint">OK guide · ▲ on demand · ▼ subtitles · ▶ next program · 0 menu</div>
 
 <script src="/room.js"></script>
 <script>
-var cur = null, nexts = [], t0 = 0, off0 = 0, endT = null, tick = null, slideT = null, kbT = null, player = null, ytReady = false, ytWant = null, ltT = null, step = -1, yd = null;
+var sb = null, cur = null, nexts = [], t0 = 0, off0 = 0, endT = null, tick = null, slideT = null, kbT = null, player = null, ytReady = false, ytWant = null, ltT = null, step = -1, yd = null;
 var v = document.getElementById('v'), a = document.getElementById('a'), mv = document.getElementById('mv'), seg = document.getElementById('seg');
 var ART = [];
 for (var i = 1; i <= 10; i++) ART.push('/station/kit/art/flyboyradio-' + (i < 10 ? '0' : '') + i + '.png');
@@ -222,6 +223,7 @@ function stop() {
   a.pause(); a.removeAttribute('src');
   mv.pause(); mv.removeAttribute('src'); mv.loop = false;
   ytStop();
+  if (sb) { sb.off(); sb = null; }
   clearInterval(tick); tick = null; clearInterval(slideT); clearInterval(kbT); step = -1; a.volume = 1; a.loop = false;
   seg.innerHTML = '';
   $('lt').className = 'lt';
@@ -278,6 +280,7 @@ var SHOW = {
       if (at > 1 && at < v.duration) v.currentTime = elapsed();
     });
     v.play();
+    if (it.kind === 'video') sb = Room.subs(v, it.id, $('sub'));  // a film or an episode: ▼ for English subtitles
     lower(it.kind === 'promo' ? 'Promo' : elapsed() > 30 ? 'You\'re watching' : 'Now', it.title, it.show && it.show !== it.title ? it.show + ' · FlyBoy[TV]' : 'FlyBoy[TV]');
     var left = it.dur - elapsed();
     if (nexts[1] && left > 25) setTimeout(function () { if (cur === it) lower('Up next', nexts[1].title, hm(nexts[1].start) + ' · ' + (nexts[1].show || 'FlyBoy[TV]')); }, (left - 22) * 1000);
@@ -638,6 +641,7 @@ function act(k) {
   if (k === 'up' || k === 'ondemand') odOpen();
   else if (k === 'enter' || k === 'info' || k === 'guide') guide();
   else if (k === 'right' || k === 'ff' || k === 'next' || k === 'skip') next();
+  else if ((k === 'down' || k === 'subs') && sb) sb.toggle();
   else if (k === 'retune') { clearTimeout(endT); setTimeout(tune, 600); }  // the phone put something on
   else if (k === 'back') location.href = '/';
   else return false;

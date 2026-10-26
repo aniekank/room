@@ -66,6 +66,32 @@ var Room = (function () {
     el._t = setTimeout(function () { el.className = 'toast'; }, ms || 2600);
   }
 
+  // English subtitles drawn over a <video> from cues the Mac parsed (the TV's own track support is too old to trust).
+  // Returns {toggle, off}; toggle() finds them the first time.
+  function subs(video, id, box) {
+    var cues = [], on = false, last = -1;
+    box.className = 'subs';
+    function draw() {
+      if (!on || !cues.length) { box.innerHTML = ''; return; }
+      var t = video.currentTime, i = -1, lo = 0, hi = cues.length - 1;
+      while (lo <= hi) { var mid = (lo + hi) >> 1; if (cues[mid][0] <= t) { i = mid; lo = mid + 1; } else hi = mid - 1; }
+      var c = i >= 0 && t <= cues[i][1] ? i : -1;
+      if (c === last) return;
+      last = c;
+      box.innerHTML = c < 0 ? '' : '<span>' + String(cues[c][2]).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</span>';
+    }
+    function set(r) { cues = r.cues || []; on = !!r.on && cues.length > 0; last = -1; draw(); }
+    get('/api/subs?id=' + encodeURIComponent(id)).then(set);
+    video.addEventListener('timeupdate', draw);
+    return {
+      toggle: function () {
+        toast(on ? 'Subtitles off' : 'Subtitles…', 2500);
+        return post('/api/subs', { id: id, on: !on }).then(function (r) { set(r); if (r.msg) toast(r.msg, 4500); return r; });
+      },
+      off: function () { video.removeEventListener('timeupdate', draw); box.innerHTML = ''; }
+    };
+  }
+
   // Loads the YouTube IFrame API once and hands back a ready player.
   function youtube(elId, opts, onReady, onState, onError) {
     window.onYouTubeIframeAPIReady = function () {
@@ -84,5 +110,5 @@ var Room = (function () {
     document.head.appendChild(s);
   }
 
-  return { post: post, get: get, poll: poll, report: report, keys: keys, pad: pad, toast: toast, youtube: youtube };
+  return { post: post, get: get, poll: poll, report: report, keys: keys, pad: pad, toast: toast, youtube: youtube, subs: subs };
 })();
