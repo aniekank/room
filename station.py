@@ -43,7 +43,7 @@ DAYPARTS = [  # (from hour, name, what airs, weighted)
     (23, 'Late Night', {'tapes': 2, 'vault': 3, 'crates': 2, 'recording': 1, 'film': 2, 'queenpin': 1, 'sports': 1}),
 ]
 LEAD = {'yourday', 'queenpin'}  # what opens a daypart before anything else: Your Day at 6am, Queenpin at 4pm, 7pm and 11pm
-SEG_LEN = {'ident': 7, 'yourday': 80, 'vault': 6 * 100, 'crates': 3 * 75, 'tapes': 3 * 90, 'queenpin': 75, 'desk': 48}
+SEG_LEN = {'ident': 7, 'yourday': 80, 'vault': 6 * 100, 'crates': 3 * 75, 'tapes': 3 * 90, 'queenpin': 75, 'desk': 60}
 BEATS_DEFAULT = movies.ICLOUD / 'TASK Beats Backup 2026-10-03' / 'Desktop'
 BEAT_DIRS = ('Recovered beats*', 'Demo cuts*', 'California Dreamin*')  # plus the finished tracks at the top
 BEAT_SKIP = ('*before-after*', '*spot*', '*EXPLICIT*', '*T.A.S.K. tag*', 'she-chose-clean*', 'She Chose - 3%*')
@@ -692,7 +692,10 @@ def pick(kind, st, rng, ref=None):
             return None
         d = None if lane else (ref if ref and ref.split(':')[0] in sports.DESKS else sports.pick_desk(rng, time.time()))
         seen = st.setdefault('sports_aired', {})
-        clips = sports.clips([lane] if lane else sports.DESKS[d.split(':')[0]][2], rng, 3 if lane else 2, seen)
+        stars = sports.stars(d) if d else []  # the desk's leaders, from the cache: one of them goes on tape
+        if d and not stars:
+            sports.warm(d)
+        clips = sports.clips([lane] if lane else sports.DESKS[d.split(':')[0]][2], rng, 3, seen, stars)
         for c in clips:
             seen[sports.clip_key(c)] = time.time()
         lead = 0 if lane else SEG_LEN['desk']
@@ -1052,7 +1055,7 @@ def library():
             ('vault', 'FlyBoyRadio Vault', 'A show from this week of the year'),
             ('crates', 'From the Crates', 'Three records from the digging list'),
             ('yourday', 'Your Day', 'Calendar, to-dos, notes, Keys and weather'),
-            ('sports', 'FlyBoy Sports', "Whichever desk is in season, then the greats on tape"),
+            ('sports', 'FlyBoy Sports', "Whichever desk is in season: scores, leaders, the models' reads, then the tape"),
             ('recording', 'FlyBoyRadio, live on WMUC', 'The 6 Feb 2011 show, all three hours')]
     def ready_first(rows):  # what's already on the Mac plays the moment you pick it, so it goes on top
         for r in rows:
@@ -1075,7 +1078,9 @@ def _sports_shelf():
              for k, (t, src, c) in sports.DESKS.items() if k != 'club']
     desks[1:1] = [{'kind': 'sports', 'ref': f'club:{c}', 'title': f'Club Football Desk · {n}', 'sub': 'Club Football Intelligence · then soccer on tape'}
                   for c, n in zip(sports.LEAGUES, ('Premier League', 'LaLiga', 'Serie A', 'Bundesliga', 'Champions League'))]
-    lanes = [{'kind': 'sports', 'ref': f'lane:{s}', 'title': s, 'sub': f"Three from the archive · {', '.join(dict.fromkeys(w for w, _, _ in c[:4]))}…"}
+    from sports_history import HISTORY
+    lanes = [{'kind': 'sports', 'ref': f'lane:{s}', 'title': s,
+              'sub': f"From the {min(e for _, _, e in HISTORY[s])[4:] if HISTORY.get(s) else 'start'} to now · {len(HISTORY.get(s, [])) + len(c)} in the archive · {', '.join(dict.fromkeys(w for w, _, _ in c[:3]))}…"}
              for s, c in sports.CLIPS.items()]
     return desks + lanes
 

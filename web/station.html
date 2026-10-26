@@ -370,12 +370,13 @@ var SHOW = {
       tracks(it, it.tracks, function (c, i) {
         if (c.media && /\.mp4$/.test(c.media)) {
           seg.innerHTML = '';
-          lower(c.tier + ' · ' + c.sport, c.artist, c.title + ' · ' + (i + 1) + ' of ' + it.tracks.length + ' · FlyBoy Sports', 14000);
-          setTimeout(function () { if (cur === it) lower(c.tier + ' · ' + c.sport, c.artist, c.title + ' · FlyBoy Sports', 10000); }, Math.max(1, it.per - (elapsed() - lead) % it.per - 16) * 1000);  // again near the end of this clip
+          var credit = (c.note || c.title) + ' · ' + c.sport + ' · FlyBoy Sports';
+          lower(c.tier, c.artist, credit + ' · ' + (i + 1) + ' of ' + it.tracks.length, 14000);
+          setTimeout(function () { if (cur === it) lower(c.tier, c.artist, credit, 10000); }, Math.max(1, it.per - (elapsed() - lead) % it.per - 16) * 1000);  // again near the end of this clip
           return;
         }
         card('sp', head(c.sport + ' · ' + (i + 1) + ' of ' + it.tracks.length) +
-          '<div class="who"><div class="name ab cream">' + esc(c.artist) + '</div><div class="what cn cream">' + esc(c.title) + '</div>' +
+          '<div class="who"><div class="name ab cream">' + esc(c.artist) + '</div><div class="what cn cream">' + esc(c.note || c.title) + '</div>' +
           '<div class="tier"><span class="tag ab">' + esc(c.tier) + '</span></div></div>' +
           ('<div class="soon" style="background-image:url(/station/kit/art/logo.png);background-size:contain"><div class="cn">' +
             (c.media ? 'From the archive' : 'On its way from the archive · the beat holds it down') + '</div></div>'));
@@ -394,7 +395,7 @@ var SHOW = {
           it.tracks.map(function (c) { return esc(c.artist); }).join(' · ') + '</div></div>');
         return;
       }
-      var i = Math.floor(elapsed() / 6) % pts.length, p = pts[i];
+      var i = Math.floor(elapsed() / 5) % pts.length, p = pts[i];
       if (i === shown) return;
       shown = i;
       var rest = '';
@@ -403,7 +404,7 @@ var SHOW = {
         '<div class="pt fade"><span class="tag ab">' + esc(p.tag) + '</span>' +
         (p.logos && p.logos.length ? '<div class="logos" style="margin-top:2.4vh">' + p.logos.map(function (l) { return '<img src="' + esc(l) + '" alt="">'; }).join('') + '</div>' : '') +
         '<div class="line ab cream">' + esc(p.text) + '</div>' + (p.sub ? '<div class="sub cn yel">' + esc(p.sub) + '</div>' : '') + '</div>' +
-        '<div class="rest">' + rest + '</div><div class="dots cn">' + (i + 1) + ' of ' + pts.length + ' · then the greats on tape</div>');
+        '<div class="rest">' + rest + '</div><div class="dots cn">' + (i + 1) + ' of ' + pts.length + ' · then on tape: ' + it.tracks.map(function (c) { return esc(c.artist); }).join(' · ') + '</div>');
     }
     Room.get('/api/station/sports?desk=' + encodeURIComponent(it.desk)).then(function (d) { D = d; shown = -1; if (cur === it) draw(); });
     tick = setInterval(function () { if (cur !== it) return; if (elapsed() >= lead) tape(); else draw(); }, 500);

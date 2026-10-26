@@ -217,21 +217,41 @@ def clip_key(c):
     return f"{c['artist']} {c['title']}".lower()
 
 
-def clips(sports, rng, n, aired):
-    """n clips across these sports: not aired in the last two weeks, one great or revered for every rising star,
-    no player twice."""
+def clips(sports, rng, n, aired, stars=()):
+    """n clips for these sports: a player the numbers say is in form (when there is one), then turn and turn about
+    a moment from the sport's whole history and a legend. Nothing aired in the last two weeks, nobody twice.
+    History comes a decade at a time, chosen evenly, so the 1930s turn up as often as the 2010s."""
     import time
-    pool = [{'artist': w, 'title': t, 'tier': tier, 'sport': s} for s in sports for w, t, tier in CLIPS.get(s, [])]
-    fresh = [c for c in pool if time.time() - aired.get(clip_key(c), 0) > 14 * 86400] or pool
-    rng.shuffle(fresh)
-    out, seen = [], set()
-    for want_rising in [False, True] * n:  # a great first, then a rising star, and so on
-        c = next((c for c in fresh if (c['tier'] == RISING) == want_rising and c['artist'] not in seen), None)
+    from sports_history import HISTORY
+    fresh = lambda c: time.time() - aired.get(clip_key(c), 0) > 14 * 86400
+    legends = [{'artist': w, 'title': t, 'tier': tier, 'sport': s} for s in sports for w, t, tier in CLIPS.get(s, [])]
+    history = [{'artist': w, 'title': t, 'tier': e, 'sport': s} for s in sports for w, t, e in HISTORY.get(s, [])]
+    rng.shuffle(legends)
+    out, seen, rising = [], set(), False
+
+    def take(c):
+        seen.add(c['artist'])
+        out.append(c)
+
+    in_form = [s for s in stars if s[2] in sports and s[0] not in seen]
+    if in_form and n:
+        who, note, sport = rng.choice(in_form)
+        take({'artist': who, 'title': f'{datetime.now().year} highlights', 'tier': 'In form', 'note': note, 'sport': sport})
+    slot = 'history'
+    while len(out) < n:
+        if slot == 'history' and history:
+            eras = sorted({c['tier'] for c in history})
+            pool = [c for c in history if c['tier'] == rng.choice(eras) and c['artist'] not in seen]
+            c = rng.choice([c for c in pool if fresh(c)] or pool or [None])
+        else:
+            c = next((c for c in legends if (c['tier'] == RISING) == rising and c['artist'] not in seen and fresh(c)), None) \
+                or next((c for c in legends if c['artist'] not in seen), None)
+            rising = not rising
         if c:
-            seen.add(c['artist'])
-            out.append(c)
-        if len(out) == n:
+            take(c)
+        elif not history and not legends:
             break
+        slot = 'legend' if slot == 'history' else 'history'
     return out
 
 
@@ -308,6 +328,7 @@ def _talk_point(p, nfl):
 
 
 def _talk(url, nfl):
+    """The games from a talk feed, followed teams first, each game once; and the feed itself for its leaders and boards."""
     d = sources._get_json(url, timeout=40)  # the Intelligence sites sleep when idle on Render; give them time to wake
     seen, out = set(), []
     order = {'live': 0, 'team': 1, 'result': 2, 'story': 3, 'table': 4, 'game': 5, 'fixture': 5, 'note': 6}
@@ -317,21 +338,78 @@ def _talk(url, nfl):
             continue
         seen.add(key)
         out.append(_talk_point(p, nfl))
-    return out, d.get('competitionName') or (f"Week {d['week']}" if d.get('week') else '')
+    return d, out
+
+
+def _num(v):
+    if isinstance(v, float) and not v.is_integer():
+        return f'{v:.1f}'
+    return f'{int(v):,}'
+
+
+def _low(stat):
+    """'Passing TDs' -> 'passing TDs', for the middle of a sentence."""
+    return ' '.join(w if w[1:2].isupper() else w.lower() for w in stat.split())
+
+
+def _leaders(boards, league, sport):
+    """Each stat's leader as a card (the next three underneath), and as a star the tape can show."""
+    pts, stars = [], []
+    for b in boards:
+        rows = b.get('rows') or []
+        if not rows:
+            continue
+        top = rows[0]
+        pts.append({'tag': f"Leaders · {b['stat']}", 'text': f"{top['name']}, {top['team']} · {_num(top['value'])}",
+                    'sub': 'then ' + ' · '.join(f"{r['name']} {_num(r['value'])}" for r in rows[1:4]) if len(rows) > 1 else '',
+                    'logos': [top['teamLogo']] if top.get('teamLogo') else []})
+        stars.append((top['name'], f"Leads {league} in {_low(b['stat'])} · {_num(top['value'])}", sport))
+    return pts, stars
 
 
 def _nfl():
-    pts, sub = _talk(f"{NFLI}/api/talk?follow={','.join(follow('nfl'))}", True)
-    return pts, sub
+    d, games = _talk(f"{NFLI}/api/talk?follow={','.join(follow('nfl'))}", True)
+    insights, stars = _leaders(d.get('leaders') or [], 'the NFL', 'American football')
+    b = d.get('board') or {}
+    rk = b.get('rankings') or []
+    if rk:
+        insights.insert(1, {'tag': 'Power rankings', 'text': ' · '.join(f"{r['rank']}. {r['team']}" for r in rk[:4]),
+                            'sub': "NFL Intelligence's efficiency model, offense and defense per play", 'logos': [r['logo'] for r in rk[:4] if r.get('logo')]})
+    pj = b.get('projections') or []
+    if pj:
+        top = max(pj, key=lambda r: r['wins'])
+        bubble = min(pj, key=lambda r: abs(r['playoff'] - 50))
+        sims = f"{b['sims']:,} simulations" if b.get('sims') else 'the season simulation'
+        insights.insert(3, {'tag': 'Projections', 'text': f"{top['team']} project to {top['wins']:.1f} wins",
+                            'sub': f"{top['playoff']:.0f}% to make the playoffs · {top['division']:.0f}% to win the division · {sims}",
+                            'logos': [top['logo']] if top.get('logo') else []})
+        insights.insert(5, {'tag': 'On the bubble', 'text': f"{bubble['team']}: {bubble['playoff']:.0f}% to make the playoffs",
+                            'sub': f"projected {bubble['wins']:.1f} wins · {sims}", 'logos': [bubble['logo']] if bubble.get('logo') else []})
+    return {'games': games, 'insights': insights, 'stars': stars, 'sub': f"Week {d['week']}" if d.get('week') else ''}
 
 
 def _club(league):
     q = urllib.parse.urlencode({'competition': league, 'follow': ','.join(follow('club'))})
-    return _talk(f'{CFI}/api/talk?{q}', False)
+    d, games = _talk(f'{CFI}/api/talk?{q}', False)
+    name = d.get('competitionName') or league
+    insights, stars = _leaders(d.get('leaders') or [], f'the {name}' if name.startswith('Premier') else name, 'Soccer')
+    b = d.get('board') or {}
+    pj = b.get('projections') or []
+    if pj:
+        odds = lambda key: ' · '.join(f"{r['team']} {r[key]:.0f}%" for r in sorted(pj, key=lambda r: -r[key])[:3])
+        insights.insert(1, {'tag': 'Title odds', 'text': odds('title'), 'sub': 'Club Football Intelligence · the season simulated',
+                            'logos': [r['logo'] for r in sorted(pj, key=lambda r: -r['title'])[:3] if r.get('logo')]})
+        if any(r.get('releg') for r in pj):
+            insights.insert(3, {'tag': 'Relegation danger', 'text': odds('releg'), 'sub': 'chance of going down, from the same simulation', 'logos': []})
+    rk = b.get('rankings') or []
+    if rk:
+        insights.insert(2, {'tag': 'Power rankings', 'text': ' · '.join(f"{r['rank']}. {r['team']}" for r in rk[:4]),
+                            'sub': "the model's rating of each side", 'logos': [r['logo'] for r in rk[:4] if r.get('logo')]})
+    return {'games': games, 'insights': insights, 'stars': stars, 'sub': name}
 
 
 def _worldcup():
-    """World Cup 2026, the road back from the final."""
+    """World Cup 2026, the road back from the final, and the players who owned it."""
     teams = {t['id']: t for t in sources._get_json(f'{WCI}/api/teams', timeout=40)['data']}
     ms = sources._get_json(f'{WCI}/api/matches?status=FINISHED', timeout=40)['data']
     name = lambda i: (teams.get(i) or {}).get('name', i.upper())
@@ -340,27 +418,70 @@ def _worldcup():
     ko = [m for m in ms if m['stage'] != 'GROUP']
     ko.sort(key=lambda m: m['kickoff'], reverse=True)
     big = sorted((m for m in ms if m['stage'] == 'GROUP'), key=lambda m: -abs((m['homeScore'] or 0) - (m['awayScore'] or 0)))
-    out = []
-    for m in ko[:6] + big[:2]:
+    games = []
+    for m in ko[:5] + big[:1]:
         pens = m.get('penalties')
-        out.append({'tag': stage.get(m['stage'], m['stage'].title()) + (f" · Group {m['groupId']}" if m.get('groupId') else ''),
-                    'text': f"{name(m['homeTeamId'])} {m['homeScore']}-{m['awayScore']} {name(m['awayTeamId'])}",  # no flag emoji: the TV can't draw them
-                    'sub': ' · '.join(x for x in (m.get('venue'), m.get('city'), datetime.fromisoformat(m['kickoff']).strftime('%-d %B %Y'),
-                                                   f'pens {pens}' if pens else '') if x), 'logos': []})
+        games.append({'tag': stage.get(m['stage'], m['stage'].title()) + (f" · Group {m['groupId']}" if m.get('groupId') else ''),
+                      'text': f"{name(m['homeTeamId'])} {m['homeScore']}-{m['awayScore']} {name(m['awayTeamId'])}",  # no flag emoji: the TV can't draw them
+                      'sub': ' · '.join(x for x in (m.get('venue'), m.get('city'), datetime.fromisoformat(m['kickoff']).strftime('%-d %B %Y'),
+                                                     f'pens {pens}' if pens else '') if x), 'logos': []})
     if ko and ko[0]['stage'] == 'FINAL':
         f = ko[0]
         champ = f['homeTeamId'] if (f['homeScore'] or 0) > (f['awayScore'] or 0) else f['awayTeamId']
-        out.insert(0, {'tag': 'Champions', 'text': f"{name(champ)}, world champions", 'sub': 'World Cup 2026 · USA · Canada · Mexico', 'logos': []})
-    return out, 'World Cup 2026, revisited'
+        games.insert(0, {'tag': 'Champions', 'text': f"{name(champ)}, world champions", 'sub': 'World Cup 2026 · USA · Canada · Mexico', 'logos': []})
+    insights, stars = [], []
+    try:
+        ps = [p for p in sources._get_json(f'{WCI}/api/players', timeout=40)['data'] if p.get('stats')]
+    except Exception:
+        ps = []
+    for stat, label in (('goals', 'Golden Boot'), ('assists', 'Most assists'), ('keyPasses', 'Chances created'), ('saves', 'Most saves')):
+        top = sorted(ps, key=lambda p: -(p['stats'].get(stat) or 0))[:4]
+        if not top or not top[0]['stats'].get(stat):
+            continue
+        t0 = top[0]
+        insights.append({'tag': f'Leaders · {label}', 'text': f"{t0['name']}, {t0['team']['name']} · {t0['stats'][stat]}",
+                         'sub': 'then ' + ' · '.join(f"{p['name']} {p['stats'][stat]}" for p in top[1:]), 'logos': [t0['photo']] if t0.get('photo') else []})
+        if stat in ('goals', 'assists'):
+            stars.append((t0['name'], f"{label} at the 2026 World Cup · {t0['stats'][stat]} {stat}", 'World Cup'))
+    best = sorted(ps, key=lambda p: -(p['stats'].get('formIndex') or 0))[:3]
+    if best:
+        insights.append({'tag': 'Form index', 'text': ' · '.join(f"{p['name']} {p['stats']['formIndex']}" for p in best),
+                         'sub': "World Cup Intelligence's rating of the tournament's best performers", 'logos': []})
+    return {'games': games, 'insights': insights, 'stars': stars, 'sub': 'World Cup 2026, revisited'}
+
+
+ESPN_LEADERS = {'nba': ('basketball', 'NBA', 'Basketball', ('Points Per Game', 'Assists Per Game', 'Rebounds Per Game')),
+                'nhl': ('hockey', 'NHL', 'Hockey', ('Goals', 'Points')),
+                'mlb': ('baseball', 'MLB', 'Baseball', ('Home Runs', 'Runs Batted In'))}
+
+
+def _espn_leaders(league):
+    sport, label, kind, cats = ESPN_LEADERS[league]
+    d = sources._get_json(f'https://site.api.espn.com/apis/site/v3/sports/{sport}/{league}/leaders')
+    pts, stars = [], []
+    for c in (d.get('leaders') or {}).get('categories') or []:
+        if c.get('displayName') not in cats or not c.get('leaders'):
+            continue
+        rows = [(l.get('athlete') or {}, l.get('value')) for l in c['leaders'][:4]]
+        team = lambda a: (a.get('team') or {}).get('abbreviation', '') if isinstance(a.get('team'), dict) else ''
+        a0, v0 = rows[0]
+        if not a0.get('displayName') or v0 is None:
+            continue
+        pts.append({'tag': f"{label} leaders · {c['displayName']}", 'text': f"{a0['displayName']}{', ' + team(a0) if team(a0) else ''} · {_num(v0)}",
+                    'sub': 'then ' + ' · '.join(f"{a.get('displayName')} {_num(v)}" for a, v in rows[1:] if v is not None),
+                    'logos': [a0['headshot']['href']] if isinstance(a0.get('headshot'), dict) else []})
+        stars.append((a0['displayName'], f"Leads the {label} in {_low(c['displayName'])} · {_num(v0)}", kind))
+    return pts, stars
 
 
 def _scoreboard():
-    out = []
+    games, insights, stars = [], [], []
+    month = datetime.now().month
     for sport, league, label in (('basketball', 'nba', 'NBA'), ('hockey', 'nhl', 'NHL'), ('baseball', 'mlb', 'MLB')):
         try:
             evs = sources._get_json(f'{ESPN}/{sport}/{league}/scoreboard')['events']
         except Exception:
-            continue
+            evs = []
         mine = set(follow(league))
         rows = []
         for e in evs:
@@ -381,8 +502,16 @@ def _scoreboard():
             rows.append((not (abbrs & mine), st['state'] != 'in', {'tag': tag, 'text': text, 'sub': '' if st['completed'] else st.get('shortDetail', ''),
                          'logos': [x for x in (a['team'].get('logo'), h['team'].get('logo')) if x]}))
         rows.sort(key=lambda r: r[:2])
-        out += [r[2] for r in rows[:3]]
-    return out, 'Last night and tonight'
+        games += [r[2] for r in rows[:2]]
+        if league == 'mlb' and not 3 <= month <= 10:
+            continue  # last season's leaders are no news in the winter
+        try:
+            p, s = _espn_leaders(league)
+            insights += p[:2]
+            stars += s
+        except Exception:
+            pass
+    return {'games': games, 'insights': insights, 'stars': stars, 'sub': 'Last night, tonight and the leaders'}
 
 
 def _world():
@@ -394,7 +523,7 @@ def _world():
             arts = sources._get_json(url).get('articles', [])
         except Exception:
             continue
-        out += [{'tag': label, 'text': x['headline'], 'sub': (x.get('description') or '')[:140], 'logos': []} for x in arts[:2]]
+        out += [{'tag': label, 'text': x['headline'], 'sub': (x.get('description') or '')[:140], 'logos': []} for x in arts[:3]]
     try:  # boxing has no site feed; ESPN's headline service carries it
         heads = sources._get_json('https://now.core.api.espn.com/v1/sports/news?sport=boxing&limit=6').get('headlines', [])
         out += [{'tag': 'Boxing', 'text': x['headline'], 'sub': (x.get('description') or '')[:140], 'logos': []}
@@ -402,12 +531,17 @@ def _world():
     except Exception:
         pass
     random.Random(datetime.now().strftime('%Y%m%d%H')).shuffle(out)
-    return out, 'Headlines'
+    return {'games': out, 'insights': [], 'stars': [], 'sub': 'Headlines'}
+
+
+def _key(name):
+    return 'sports2:' + name
 
 
 def desk(name):
-    """A desk's talking points: {desk, title, sub, from, points}. Cached a few minutes; a desk that can't be reached
-    comes back empty and the segment goes straight to the tape."""
+    """A desk's cards: the games first (followed teams leading), then the leaders and the models' reads.
+    {desk, title, sub, from, points}. Cached a few minutes; a desk that can't be reached comes back empty and the
+    segment goes straight to the tape."""
     k = name.split(':')[0]
     if k not in DESKS:
         return None
@@ -415,10 +549,17 @@ def desk(name):
     build = {'nfl': _nfl, 'worldcup': _worldcup, 'scoreboard': _scoreboard, 'world': _world,
              'club': lambda: _club(name.split(':')[1] if ':' in name else LEAGUES[0])}[k]
     try:
-        pts, sub = sources.cached('sports:' + name, 3 * 86400 if k == 'worldcup' else 240, lambda: list(build()))
+        d = sources.cached(_key(name), 3 * 86400 if k == 'worldcup' else 240, build)
     except Exception:
-        pts, sub = [], ''
-    return {'desk': name, 'title': title, 'sub': sub, 'from': src, 'points': pts[:8]}
+        d = {'games': [], 'insights': [], 'sub': ''}
+    pts = d['games'][:6] + d['insights'][:6] if d['insights'] else d['games'][:12]
+    return {'desk': name, 'title': title, 'sub': d.get('sub', ''), 'from': src, 'points': pts}
+
+
+def stars(name):
+    """The players a desk's numbers say are in form, from the cache only: the schedule never waits on the network."""
+    hit = sources._read().get(_key(name))
+    return [tuple(s) for s in hit['v'].get('stars', [])] if hit else []
 
 
 def warm(name):
