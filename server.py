@@ -267,6 +267,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(dig.stats())
         elif p == '/api/practice':
             return self._json(practice_summary())
+        elif p == '/api/movies/progress':  # how far iCloud has got bringing down a film you picked
+            mid = q.get('id', '')
+            size = station._cloud_size({'id': mid})
+            pct = station.icloud_progress(Path.home() / mid)
+            return self._json({'pct': pct, 'gb': round(size / 1e9, 1) if size else None, 'on_power': station.on_power()})
         elif p == '/api/movies':
             r = movies.scan()
             r['movies'] = [dict(m, poster=art.for_movie(m)) for m in r['movies']]
