@@ -101,8 +101,13 @@ def _opensubtitles(mid):
     title = (m or {}).get('title') or name
     year = re.search(r'\b(19|20)\d\d\b', title + ' ' + name)
     query = re.sub(r'\s*\(\d{4}\)\s*$', '', title)
-    q = urllib.parse.urlencode({k: v for k, v in (('query', query), ('year', year.group(0) if year else ''),
-                                                    ('languages', 'en'), ('type', 'movie')) if v})
+    ep = re.search(r'\bS(\d\d)E(\d\d)\b', title)
+    if ep:  # an episode: the show, then which one
+        params = (('query', title[:ep.start()].strip()), ('season_number', str(int(ep.group(1)))),
+                  ('episode_number', str(int(ep.group(2)))), ('languages', 'en'), ('type', 'episode'))
+    else:
+        params = (('query', query), ('year', year.group(0) if year else ''), ('languages', 'en'), ('type', 'movie'))
+    q = urllib.parse.urlencode({k: v for k, v in params if v})
     found = _api(f'/subtitles?{q}').get('data') or []
     words = set(re.findall(r'[a-z0-9]+', name.lower())) - {'the', 'of', 'and', 'a'}
 

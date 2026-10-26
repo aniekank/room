@@ -64,12 +64,13 @@ JUNK = re.compile(r'\b(360p|480p|576p|720p|1080p|2160p|4k|uhd|hdr|x264|x265|h\.?
 
 
 YEAR = re.compile(r'\((19|20)\d\d\)$')
-EPISODE = re.compile(r'\bS\d\dE\d\d$')
+EPISODE = re.compile(r'\bS\d\dE\d\d\b')
 GENERIC = re.compile(r'^(season|series|disc|disk|cd|part|volume|vol|featurettes|extras|specials|bonus)\b', re.I)
 
 
 def _title(name, parent=''):
-    """Oldboy.2003.REMASTERED.1080p.BluRay -> Oldboy (2003); Show.S02E05.WEB -> Show S02E05."""
+    """Oldboy.2003.REMASTERED.1080p.BluRay -> Oldboy (2003); Show.S02E05.WEB -> Show S02E05;
+    Show S02E01 The Bad Fish Paradigm (1080p x265) -> Show S02E01 · The Bad Fish Paradigm."""
     stem = Path(name).stem
     stem = re.sub(r'(?<=\w)[._](?=\w)', ' ', stem).replace('_', ' ')  # Mulholland.Drive.2001 -> Mulholland Drive 2001
     stem = re.sub(r'^www\.\S+\s+-\s+', '', stem).strip()
@@ -80,7 +81,13 @@ def _title(name, parent=''):
     ep = re.search(r'\bS(\d{1,2})\s?E(\d{1,3})\b', stem, re.I)
     if ep:
         show = re.sub(r'[\s\-–\[(]+$', '', stem[:ep.start()])
-        return f'{show} S{int(ep.group(1)):02d}E{int(ep.group(2)):02d}'.strip()
+        name = re.sub(r'\[[^\]]*\]|\([^)]*\)', '', stem[ep.end():])  # (1080p x265 Joy), [eztv]
+        junk = JUNK.search(name)
+        name = re.sub(r'^[\s\-–.:]+|[\s\-–.:]+$', '', name[:junk.start()] if junk else name)
+        name = re.sub(r'^(web|amzn|nf|hulu|dsnp|hmax|atvp|pcok|max)\b.*', '', name, flags=re.I)  # where it was ripped from
+        if len(re.sub(r'[^A-Za-z]', '', name)) < 3:  # a release group or nothing, not a name
+            name = ''
+        return (f'{show} S{int(ep.group(1)):02d}E{int(ep.group(2)):02d}' + (f' · {name}' if name else '')).strip()
     yr = re.search(r'[\s(\[-]((?:19|20)\d\d)[\s)\]-]|[\s(\[-]((?:19|20)\d\d)$', stem)
     if yr and yr.start() > 0:
         return f'{re.sub(r"[\s\-–\[(]+$", "", stem[:yr.start()])} ({yr.group(1) or yr.group(2)})'.replace('  ', ' ')

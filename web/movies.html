@@ -137,8 +137,8 @@ function status(m) {
 }
 // an episode with no art reads "S1 · E04" over its name, not "Season 1, Episode 04 - ..." cut off mid-word
 function npTitle(t) {
-  var e = /Season\s*(\d+),?\s*Episode\s*(\d+)\s*[-–:.]?\s*(.*)/i.exec(t);
-  return e ? '<span class="ep">S' + (+e[1]) + ' · E' + e[2] + '</span>' + esc(e[3] || 'Episode ' + (+e[2])) : esc(t);
+  var e = /Season\s*(\d+),?\s*Episode\s*(\d+)\s*[-–:.]?\s*(.*)/i.exec(t) || /S(\d\d)E(\d\d)(?: · (.*))?$/.exec(t);
+  return e ? '<span class="ep">S' + (+e[1]) + ' · E' + (+e[2]) + '</span>' + esc(e[3] || 'Episode ' + (+e[2])) : esc(t);
 }
 function card(m, on) {
   var pct = started(m) ? Math.round(100 * m.t / m.duration) : 0;
