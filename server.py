@@ -287,6 +287,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(station.now())
         elif p == '/api/station/yourday':
             return self._json(personal.your_day())
+        elif p == '/api/station/sports':
+            import sports
+            return self._json(sports.desk(q.get('desk', 'world')) or {'points': []})
         elif p.startswith('/station/kit/'):
             from urllib.parse import unquote
             return self._send_file(station.kit_path(unquote(p[len('/station/kit/'):])))

@@ -24,6 +24,7 @@
   #ytbox.mv #mv { display: block; }
   body.k-vault #ytbox { left: 52vw; top: 27vh; width: 42vw; height: 23.6vw; border-left: .5vw solid #c5221f; }
   body.k-crates #ytbox { left: 66vw; top: 62vh; width: 28vw; height: 15.75vw; }
+  body.k-sports #ytbox { left: 0; top: 0; width: 100%; height: 100%; }  /* the clip takes the whole screen; who it is goes in the lower third */
   body.local .vault .list { top: 27vh; }  /* no video box when the song plays from the Mac */
 
 
@@ -60,6 +61,23 @@
   .yd .steps { position: absolute; left: 0; bottom: 7vh; font-size: 1.3vw; }
   .yd .steps span { margin-right: 1.6vw; color: rgba(241,238,230,.4); }
   .yd .steps span.on { color: #e9ff42; }
+
+  /* FlyBoy Sports: the desk, then the tape */
+  .sp .head { position: absolute; left: 0; top: 7vh; }
+  .sp .pt { position: absolute; left: 0; right: 30vw; top: 30vh; }
+  .sp .pt .logos img { height: 9vh; margin-right: 1.4vw; vertical-align: middle; }
+  .sp .pt .line { font-size: 4.4vw; line-height: 1.05; margin-top: 2.4vh; }
+  .sp .pt .sub { font-size: 1.8vw; margin-top: 1.8vh; line-height: 1.4; }
+  .sp .rest { position: absolute; right: 0; width: 26vw; top: 30vh; font-size: 1.35vw; line-height: 1.5; }
+  .sp .rest div { color: rgba(241,238,230,.45); margin-bottom: 1.2vh; overflow: hidden; max-height: 4.2vw; }
+  .sp .rest b { display: block; color: #e9ff42; font-weight: 700; }
+  .sp .dots { position: absolute; left: 0; bottom: 7vh; font-size: 1.3vw; color: rgba(241,238,230,.4); }
+  .sp .who { position: absolute; left: 0; top: 33vh; width: 31vw; }
+  .sp .who .name { font-size: 3.6vw; line-height: 1.02; }
+  .sp .who .what { font-size: 1.7vw; margin-top: 2vh; line-height: 1.4; }
+  .sp .who .tier { margin-top: 3vh; }
+  .sp .soon { position: absolute; left: 40vw; top: 24vh; width: 54vw; height: 30.4vw; background: #12151c center/cover no-repeat; }
+  .sp .soon div { position: absolute; left: 0; right: 0; bottom: 0; padding: 1.4vh 1.6vw; font-size: 1.5vw; color: rgba(241,238,230,.8); background: rgba(11,11,10,.85); }
 
   /* slow-zoom slideshow (Ride With Me, Queenpin) */
   .kb .bg, .kb .fg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: center/cover no-repeat; }
@@ -187,6 +205,9 @@ function tune() {
     cur = r.item; nexts = r.next; off0 = r.offset; t0 = Date.now();
     $('gPart').textContent = r.daypart;
     showWait(r.waiting);
+    if (!SHOW[cur.kind] && location.search.indexOf('k=' + cur.kind) < 0) {  // a kind this page predates: Room was updated, load the new page
+      location.replace('/station?k=' + encodeURIComponent(cur.kind)); return;
+    }
     stop();
     document.body.className = 'k-' + cur.kind;
     (SHOW[cur.kind] || SHOW.ident)(cur);
@@ -338,6 +359,56 @@ var SHOW = {
     }, 500);
   },
 
+  sports: function (it) {
+    var lead = it.lead || 0, D = null, shown = -1;
+    function head(sub) {
+      return '<div class="head"><span class="tag ab">FlyBoy Sports</span><div class="mid ab cream" style="margin-top:1.2vh">' + esc(D ? D.title : it.title.replace('FlyBoy Sports · ', '')) +
+        (D && D.sub ? ' <span class="yel">· ' + esc(D.sub) + '</span>' : '') + '</div><div class="credit cn yel">' + esc(sub) + '</div></div>';
+    }
+    function tape() {  // the greats on tape: from the Mac as a music video, or a beat under the card while it comes down
+      clearInterval(tick); tick = null;
+      tracks(it, it.tracks, function (c, i) {
+        if (c.media && /\.mp4$/.test(c.media)) {
+          seg.innerHTML = '';
+          lower(c.tier + ' · ' + c.sport, c.artist, c.title + ' · ' + (i + 1) + ' of ' + it.tracks.length + ' · FlyBoy Sports', 14000);
+          setTimeout(function () { if (cur === it) lower(c.tier + ' · ' + c.sport, c.artist, c.title + ' · FlyBoy Sports', 10000); }, Math.max(1, it.per - (elapsed() - lead) % it.per - 16) * 1000);  // again near the end of this clip
+          return;
+        }
+        card('sp', head(c.sport + ' · ' + (i + 1) + ' of ' + it.tracks.length) +
+          '<div class="who"><div class="name ab cream">' + esc(c.artist) + '</div><div class="what cn cream">' + esc(c.title) + '</div>' +
+          '<div class="tier"><span class="tag ab">' + esc(c.tier) + '</span></div></div>' +
+          ('<div class="soon" style="background-image:url(/station/kit/art/logo.png);background-size:contain"><div class="cn">' +
+            (c.media ? 'From the archive' : 'On its way from the archive · the beat holds it down') + '</div></div>'));
+      });
+    }
+    if (!lead || elapsed() >= lead) return tape();
+    if (it.beats && it.beats[0]) beat(it.beats[0], elapsed(), 0.6);
+    card('sp', head('Checking in with the desk…'));
+    function draw() {
+      if (!D) return;
+      var pts = D.points || [];
+      if (!pts.length) {
+        if (shown === 0) return;
+        shown = 0;
+        card('sp', head(D.from) + '<div class="pt"><div class="line ab cream">The desk is quiet right now.</div><div class="sub cn yel">On tape next: ' +
+          it.tracks.map(function (c) { return esc(c.artist); }).join(' · ') + '</div></div>');
+        return;
+      }
+      var i = Math.floor(elapsed() / 6) % pts.length, p = pts[i];
+      if (i === shown) return;
+      shown = i;
+      var rest = '';
+      for (var j = 1; j <= 3 && j < pts.length; j++) { var r = pts[(i + j) % pts.length]; rest += '<div class="cn"><b>' + esc(r.tag) + '</b>' + esc(r.text) + '</div>'; }
+      card('sp', head(D.from) +
+        '<div class="pt fade"><span class="tag ab">' + esc(p.tag) + '</span>' +
+        (p.logos && p.logos.length ? '<div class="logos" style="margin-top:2.4vh">' + p.logos.map(function (l) { return '<img src="' + esc(l) + '" alt="">'; }).join('') + '</div>' : '') +
+        '<div class="line ab cream">' + esc(p.text) + '</div>' + (p.sub ? '<div class="sub cn yel">' + esc(p.sub) + '</div>' : '') + '</div>' +
+        '<div class="rest">' + rest + '</div><div class="dots cn">' + (i + 1) + ' of ' + pts.length + ' · then the greats on tape</div>');
+    }
+    Room.get('/api/station/sports?desk=' + encodeURIComponent(it.desk)).then(function (d) { D = d; shown = -1; if (cur === it) draw(); });
+    tick = setInterval(function () { if (cur !== it) return; if (elapsed() >= lead) tape(); else draw(); }, 500);
+  },
+
   yourday: function (it) {
     Room.get('/api/station/yourday').then(function (d) { yd = d; if (cur === it) dayCard(true); });
     ytNext = null;
@@ -394,7 +465,7 @@ function beat(b, at, vol) {
 function tracks(it, list, show) {
   var per = it.per || 90, last = -1, beatOn = false;
   function at() {
-    var e = elapsed(), i = Math.min(list.length - 1, Math.floor(e / per)), r = list[i];
+    var e = elapsed() - (it.lead || 0), i = Math.min(list.length - 1, Math.floor(e / per)), r = list[i];
     if (i === last) return;
     last = i;
     show(r, i);
@@ -501,8 +572,8 @@ v.addEventListener('error', function () { if (cur && (cur.kind === 'video' || cu
 
 // ------------------------------------------------------------ on demand (▲ on the TV remote)
 
-var OD = [['segments', 'Segments'], ['series', 'Shows'], ['academy', 'Academy'], ['films', 'Films'], ['vault', 'Vault']];
-var od = { open: false, lib: null, col: 0, sel: [0, 0, 0, 0, 0] }, ROWS_OD = 6;
+var OD = [['segments', 'Segments'], ['series', 'Shows'], ['academy', 'Academy'], ['films', 'Films'], ['vault', 'Vault'], ['sports', 'Sports']];
+var od = { open: false, lib: null, col: 0, sel: [0, 0, 0, 0, 0, 0] }, ROWS_OD = 6;
 function odOpen() {
   od.open = true; $('od').className = 'od on';
   $('odList').innerHTML = '<div class="it"><div class="t ab">Loading…</div></div>';

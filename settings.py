@@ -51,6 +51,7 @@ DEFAULTS = {
     'notion_token': None,
     'notion_tasks': None,
     'notion_notes': [],
+    'sports_follow': {},  # FlyBoy Sports: teams to lead each desk with, by desk (nfl, club, nba, nhl, mlb)
 }
 
 

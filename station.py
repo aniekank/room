@@ -36,14 +36,14 @@ _lock = threading.RLock()  # crates_picks marks what aired while now() already h
 DAYPARTS = [  # (from hour, name, what airs, weighted)
     (2, 'Overnight', {'tapes': 4, 'vault': 2, 'crates': 2}),
     (6, 'Morning', {'yourday': 2, 'series': 4, 'crates': 2, 'tapes': 1}),
-    (10, 'Daytime', {'series': 4, 'crates': 3, 'vault': 1, 'tapes': 1}),
+    (10, 'Daytime', {'series': 4, 'crates': 3, 'vault': 1, 'tapes': 1, 'sports': 1}),
     (13, 'FlyBoy Academy', {'course': 5, 'crates': 1, 'tapes': 1}),
-    (16, 'Afternoon', {'series': 4, 'crates': 2, 'vault': 1, 'promo': 1, 'queenpin': 1}),
-    (19, 'Prime Time', {'queenpin': 1, 'film': 5, 'series': 1, 'promo': 1}),
-    (23, 'Late Night', {'tapes': 2, 'vault': 3, 'crates': 2, 'recording': 1, 'film': 2, 'queenpin': 1}),
+    (16, 'Afternoon', {'series': 4, 'crates': 2, 'vault': 1, 'promo': 1, 'queenpin': 1, 'sports': 2}),
+    (19, 'Prime Time', {'queenpin': 1, 'film': 5, 'series': 1, 'promo': 1, 'sports': 1}),
+    (23, 'Late Night', {'tapes': 2, 'vault': 3, 'crates': 2, 'recording': 1, 'film': 2, 'queenpin': 1, 'sports': 1}),
 ]
 LEAD = {'yourday', 'queenpin'}  # what opens a daypart before anything else: Your Day at 6am, Queenpin at 4pm, 7pm and 11pm
-SEG_LEN = {'ident': 7, 'yourday': 80, 'vault': 6 * 100, 'crates': 3 * 75, 'tapes': 3 * 90, 'queenpin': 75}
+SEG_LEN = {'ident': 7, 'yourday': 80, 'vault': 6 * 100, 'crates': 3 * 75, 'tapes': 3 * 90, 'queenpin': 75, 'desk': 48}
 BEATS_DEFAULT = movies.ICLOUD / 'TASK Beats Backup 2026-10-03' / 'Desktop'
 BEAT_DIRS = ('Recovered beats*', 'Demo cuts*', 'California Dreamin*')  # plus the finished tracks at the top
 BEAT_SKIP = ('*before-after*', '*spot*', '*EXPLICIT*', '*T.A.S.K. tag*', 'she-chose-clean*', 'She Chose - 3%*')
@@ -394,6 +394,7 @@ TRACKS = DATA / 'tracks'  # the Vault's and the Crates' songs, as music videos (
 INDEX = TRACKS / 'index.json'  # "artist title" -> file, so a segment can lead with what's already here
 FMT = ('bestvideo[vcodec^=avc1][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]'  # H.264 + AAC: what the TV plays
        '/bestaudio[ext=m4a]/bestaudio')  # no video to be had: the song at least
+CLIP_FMT = 'bestvideo[vcodec^=avc1][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]'  # sports: picture or nothing, 720p fits the cap
 _fetch = {'want': {}, 'until': 0, 'backoff': 900, 'started': False}  # query -> (priority, candidate ids)
 _flock = threading.Lock()
 
@@ -410,8 +411,10 @@ def _index():
 
 
 def cached(t):
-    """This song's file on the Mac, or ''."""
+    """This song's file on the Mac, or ''. A sports clip counts only as a video: its sound alone is no use."""
     name = _index().get(_key(t), '')
+    if t.get('sport') and not name.endswith('.mp4'):
+        return ''
     return name if name and (TRACKS / name).is_file() else ''
 
 
@@ -440,8 +443,9 @@ class _Pushback(Exception):
     pass
 
 
-def _download(vid):
-    """One music video at the best quality the TV plays (H.264 up to 1080p with AAC), or its audio if that's all there is."""
+def _download(vid, clip=False):
+    """One music video at the best quality the TV plays (H.264 up to 1080p with AAC), or its audio if that's all there is.
+    A sports clip (clip=True) is 720p video or nothing."""
     import engine
     import yt_dlp
     TRACKS.mkdir(exist_ok=True)
@@ -451,7 +455,7 @@ def _download(vid):
     if settings.get('youtube_cookies_browser'):  # your own YouTube sign-in, if you've turned it on: gets past YouTube's bot check
         extra['cookiesfrombrowser'] = (settings.get('youtube_cookies_browser'),)
     try:
-        with yt_dlp.YoutubeDL(engine.opts(format=FMT, merge_output_format='mp4', outtmpl=str(TRACKS / '%(id)s.%(ext)s'),
+        with yt_dlp.YoutubeDL(engine.opts(format=CLIP_FMT if clip else FMT, merge_output_format='mp4', outtmpl=str(TRACKS / '%(id)s.%(ext)s'),
                                           max_filesize=150e6, **extra)) as ydl:
             ydl.download([f'https://www.youtube.com/watch?v={vid}'])
     except Exception as e:
@@ -459,8 +463,10 @@ def _download(vid):
         if '429' in msg or 'not a bot' in msg or 'Too Many Requests' in msg:
             raise _Pushback(msg)
         old = TRACKS / f'{vid}.m4a'  # audio from before the videos: better than nothing
-        return old.name if old.is_file() else ''
-    have = [p for p in TRACKS.glob(vid + '.*') if p.suffix in ('.mp4', '.m4a', '.webm')]
+        return old.name if old.is_file() and not clip else ''
+    for p in TRACKS.glob(vid + '.*.part'):  # what an over-the-cap attempt leaves behind
+        p.unlink(missing_ok=True)
+    have = [p for p in TRACKS.glob(vid + '.*') if p.suffix in (('.mp4',) if clip else ('.mp4', '.m4a', '.webm'))]
     return have[0].name if have else ''
 
 
@@ -471,7 +477,7 @@ def want(t, priority):
     with _flock:
         old = _fetch['want'].get(_key(t))
         if not old or priority < old[0]:
-            _fetch['want'][_key(t)] = (priority, t['all'])
+            _fetch['want'][_key(t)] = (priority, t['all'], bool(t.get('sport')))
         if not _fetch['started']:
             _fetch['started'] = True
             threading.Thread(target=_fetcher, daemon=True).start()
@@ -490,11 +496,11 @@ def _fetcher():
             if ready and not _grow_crates_pool():
                 time.sleep(5)
             continue
-        key, (_, vids) = job
+        key, (_, vids, clip) = job
         name = ''
         try:
             for vid in vids:
-                name = _download(vid)
+                name = _download(vid, clip)
                 if name:
                     break
             _fetch['backoff'] = 900
@@ -679,6 +685,20 @@ def pick(kind, st, rng, ref=None):
             return None
         picks = lead_with_cached([dict(r) for r in crates_picks(rng)])
         return {'kind': 'crates', 'title': 'From the Crates', 'records': picks, 'beats': some_beats(rng, 1), 'per': 75, 'dur': 75 * len(picks)}
+    if kind == 'sports':  # ref: a desk ('nfl', 'club:laliga', ...) to open on, or 'lane:Boxing' for three clips of one sport
+        import sports
+        lane = ref[5:] if ref and ref.startswith('lane:') else None
+        if lane and lane not in sports.CLIPS:
+            return None
+        d = None if lane else (ref if ref and ref.split(':')[0] in sports.DESKS else sports.pick_desk(rng, time.time()))
+        seen = st.setdefault('sports_aired', {})
+        clips = sports.clips([lane] if lane else sports.DESKS[d.split(':')[0]][2], rng, 3 if lane else 2, seen)
+        for c in clips:
+            seen[sports.clip_key(c)] = time.time()
+        lead = 0 if lane else SEG_LEN['desk']
+        title = lane if lane else sports.DESKS[d.split(':')[0]][0]
+        return {'kind': 'sports', 'title': f'FlyBoy Sports · {title}', 'show': 'FlyBoy Sports', 'desk': d, 'lead': lead,
+                'tracks': lead_with_cached(clips), 'beats': some_beats(rng, 1), 'per': 90, 'dur': lead + 90 * len(clips)}
     if kind == 'yourday':  # one of your beats underneath
         return {'kind': 'yourday', 'title': 'Your Day', 'dur': SEG_LEN['yourday'], 'beats': some_beats(rng, 1)}
     if kind == 'tapes':
@@ -743,8 +763,10 @@ def _stamp(item, start):
 
 def _plan(st, at):
     """The next block: an ident, then a program for the daypart it starts in."""
+    import sports
     rng = random.Random()
     start, name, weights = daypart(at)
+    weights = sports.weekend_boost(weights, at)
     block = []
     if st.get('daypart') != name:  # a new daypart opens with its lead segment
         st['daypart'] = name
@@ -969,7 +991,7 @@ def skip():
     return now()
 
 
-ON_DEMAND = ('queenpin', 'tapes', 'vault', 'crates', 'yourday', 'series', 'course', 'film', 'promo', 'recording')
+ON_DEMAND = ('queenpin', 'tapes', 'vault', 'crates', 'yourday', 'series', 'course', 'film', 'promo', 'recording', 'sports')
 
 
 def _promo_title(src):
@@ -1030,6 +1052,7 @@ def library():
             ('vault', 'FlyBoyRadio Vault', 'A show from this week of the year'),
             ('crates', 'From the Crates', 'Three records from the digging list'),
             ('yourday', 'Your Day', 'Calendar, to-dos, notes, Keys and weather'),
+            ('sports', 'FlyBoy Sports', "Whichever desk is in season, then the greats on tape"),
             ('recording', 'FlyBoyRadio, live on WMUC', 'The 6 Feb 2011 show, all three hours')]
     def ready_first(rows):  # what's already on the Mac plays the moment you pick it, so it goes on top
         for r in rows:
@@ -1042,7 +1065,19 @@ def library():
         'academy': ready_first([dict(x, kind='course') for x in runs('course')]),
         'films': ready_first([dict(x, kind='film', sub='') for x in films]),
         'vault': [{'kind': 'vault', 'ref': v['date'], 'title': v['label'], 'sub': f"{len(v['tracks'])} tracks"} for v in shows()],
+        'sports': _sports_shelf(),
     }
+
+
+def _sports_shelf():
+    import sports
+    desks = [{'kind': 'sports', 'ref': k, 'title': t, 'sub': f'{src} · then {" and ".join(c).lower()} on tape'}
+             for k, (t, src, c) in sports.DESKS.items() if k != 'club']
+    desks[1:1] = [{'kind': 'sports', 'ref': f'club:{c}', 'title': f'Club Football Desk · {n}', 'sub': 'Club Football Intelligence · then soccer on tape'}
+                  for c, n in zip(sports.LEAGUES, ('Premier League', 'LaLiga', 'Serie A', 'Bundesliga', 'Champions League'))]
+    lanes = [{'kind': 'sports', 'ref': f'lane:{s}', 'title': s, 'sub': f"Three from the archive · {', '.join(dict.fromkeys(w for w, _, _ in c[:4]))}…"}
+             for s, c in sports.CLIPS.items()]
+    return desks + lanes
 
 
 _busy = set()
@@ -1052,7 +1087,11 @@ def _prepare(cur, q):
     """In the background: download what's coming up from iCloud and look up YouTube ids for segments."""
     for pos, it in enumerate([cur] + q[:8]):  # songs eight programs ahead; downloads three
         key = it.get('uid') or id(it)
-        if it['kind'] in ('vault', 'crates'):
+        if it['kind'] == 'sports' and it.get('desk') and ('desk', key) not in _busy:
+            _busy.add(('desk', key))
+            import sports
+            sports.warm(it['desk'])  # so the TV's ask is answered from the cache, even when a site has to wake
+        if it['kind'] in ('vault', 'crates', 'sports'):
             lst = it.get('tracks') or it.get('records') or []
             if any(not t.get('all') for t in lst):
                 if key not in _busy:

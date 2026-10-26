@@ -155,7 +155,7 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
 document.querySelectorAll('[data-key]').forEach(b => b.onclick = () => cmd({ key: b.dataset.key }));
 document.querySelectorAll('[data-do]').forEach(b => b.onclick = () => cmd({ do: b.dataset.do }));
 // On demand: the same shelves as ▲ on the TV. Tap anything and it's on.
-const SHELVES = [['segments', 'Segments'], ['series', 'Shows'], ['academy', 'Academy'], ['films', 'Films'], ['vault', 'Vault']];
+const SHELVES = [['segments', 'Segments'], ['series', 'Shows'], ['academy', 'Academy'], ['films', 'Films'], ['vault', 'Vault'], ['sports', 'Sports']];
 let lib = null, shelf = 'segments';
 async function playNow(x) {
   if (!(state && state.tv_online && (state.tv || {}).channel === 'station')) await post('/api/tvctl', { channel: 'station' });
