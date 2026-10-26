@@ -34,13 +34,13 @@ STATE = DATA / 'station.json'
 _lock = threading.RLock()  # crates_picks marks what aired while now() already holds it
 
 DAYPARTS = [  # (from hour, name, what airs, weighted)
-    (2, 'Overnight', {'tapes': 4, 'vault': 2, 'crates': 2}),
-    (6, 'Morning', {'yourday': 2, 'series': 4, 'crates': 2, 'tapes': 1}),
-    (10, 'Daytime', {'series': 4, 'crates': 3, 'vault': 1, 'tapes': 1, 'sports': 1}),
+    (2, 'Overnight', {'tapes': 4, 'vault': 2, 'crates': 2, 'videos': 3}),
+    (6, 'Morning', {'yourday': 2, 'series': 4, 'crates': 2, 'tapes': 1, 'videos': 1}),
+    (10, 'Daytime', {'series': 4, 'crates': 3, 'vault': 1, 'tapes': 1, 'sports': 1, 'videos': 2}),
     (13, 'FlyBoy Academy', {'course': 5, 'crates': 1, 'tapes': 1}),
-    (16, 'Afternoon', {'series': 4, 'crates': 2, 'vault': 1, 'promo': 1, 'queenpin': 1, 'sports': 2}),
+    (16, 'Afternoon', {'series': 4, 'crates': 2, 'vault': 1, 'promo': 1, 'queenpin': 1, 'sports': 2, 'videos': 2}),
     (19, 'Prime Time', {'queenpin': 1, 'film': 5, 'series': 1, 'promo': 1, 'sports': 1}),
-    (23, 'Late Night', {'tapes': 2, 'vault': 3, 'crates': 2, 'recording': 1, 'film': 2, 'queenpin': 1, 'sports': 1}),
+    (23, 'Late Night', {'tapes': 2, 'vault': 3, 'crates': 2, 'recording': 1, 'film': 2, 'queenpin': 1, 'sports': 1, 'videos': 3}),
 ]
 LEAD = {'yourday', 'queenpin'}  # what opens a daypart before anything else: Your Day at 6am, Queenpin at 4pm, 7pm and 11pm
 SEG_LEN = {'ident': 7, 'yourday': 80, 'vault': 6 * 100, 'crates': 3 * 75, 'tapes': 3 * 90, 'queenpin': 75, 'desk': 60}
@@ -358,6 +358,165 @@ def crates_picks(rng, n=3):
     return picks
 
 
+# ---------------------------------------------------------------- FlyBoy Videos
+
+MV = DATA / 'music_videos.json'  # "artist title" -> {artist, title, show, vids, len, views, likes, year, checked, fb}
+MV_POOL = 12  # unaired music videos kept on the Mac
+_mv = {'last': 0}
+
+
+def _mv_read():
+    try:
+        return json.loads(MV.read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def _mv_write(db):
+    MV.write_text(json.dumps(db))
+
+
+def mv_candidates():
+    """Every song the FlyBoyRadio shows played (not your own), once each, with the show it's from."""
+    seen = {}
+    for sh in shows():
+        for t in sh['tracks']:
+            if not t['own']:
+                seen.setdefault(_key(t), {'artist': t['artist'], 'title': t['title'], 'show': sh['label']})
+    return seen
+
+
+def _mv_lookup(t, details=True):
+    """The song's official music video on YouTube: candidate ids (best first), its length, views, likes and year."""
+    import engine
+    import yt_dlp
+    title = re.sub(r'\s*[\(\[].*?(remix|mix|edit|version|instrumental|dub).*?[\)\]]', '', t['title'], flags=re.I)
+    hits = sources._yt_search(f"{t['artist'].split(' featuring ')[0]} {title} official music video", 8)
+    bad = ('lyric', 'audio', 'visualizer', 'visualiser', 'live', 'cover', 'reaction', 'karaoke', 'instrumental', '8d', 'slowed')
+    real = re.compile(r'(official|music)\s*(hd\s*|4k\s*)?video|[\(\[]video[\)\]]', re.I)  # a music video, not a song over a still
+    flat = lambda x: re.sub(r'[^a-z0-9]+', ' ', x.lower().replace('&', 'and')).strip()
+    name = flat(re.split(r'[\(\[]', title)[0])  # the song's own title has to be in the video's: search will offer another hit by the same artist
+    ok = [h for h in hits if not h['live'] and 120 <= (h['duration'] or 0) <= 600 and real.search(h['title'])
+          and not any(w in h['title'].lower() for w in bad) and name and f' {name} ' in f" {flat(h['title'])} "]
+    ok.sort(key=lambda h: -h['views'])
+    out = {'vids': [h['id'] for h in ok[:4]], 'len': ok[0]['duration'] if ok else 0, 'views': ok[0]['views'] if ok else 0,
+           'likes': 0, 'year': 0}
+    if ok and details:  # one more look at the top one for what the search leaves out: its likes and when it went up
+        try:
+            with yt_dlp.YoutubeDL(engine.opts(skip_download=True)) as ydl:
+                info = ydl.extract_info(f'https://www.youtube.com/watch?v={ok[0]["id"]}', download=False)
+            out.update(likes=info.get('like_count') or 0, views=info.get('view_count') or out['views'],
+                       year=int((info.get('upload_date') or '0')[:4] or 0))
+        except Exception as e:  # scored on its views alone; and if YouTube is pushing back, the fetcher takes its break
+            if 'not a bot' in str(e) or '429' in str(e):
+                with _flock:
+                    _fetch['until'] = time.time() + _fetch['backoff']
+    return out
+
+
+def mv_score(r):
+    """How entertaining a video is likely to be, 0 to about 1.5: views for its age (a 2009 video with 2M is doing as well
+    as a 2024 one with 10M), how many who watched it liked it, then what you've told FlyBoy[TV] with skips and stars."""
+    import math
+    if not r.get('vids'):
+        return 0
+    years = max(1, datetime.now().year - (r.get('year') or 2012) + 0.5)
+    per_year = (r.get('views') or 0) / years
+    reach = min(1, max(0, (math.log10(per_year + 1) - 3.5) / 3.5))  # ~3k a year scores 0, ~10M a year scores 1
+    liked = min(1, ((r.get('likes') or 0) / r['views']) / 0.025) if r.get('views') and r.get('likes') else reach * 0.6
+    return max(0.02, 0.45 * reach + 0.55 * liked + 0.3 * (r.get('fb') or 0))
+
+
+def _mv_track(rec):
+    return {'artist': rec['artist'], 'title': rec['title'], 'show': rec['show'], 'mv': True, 'all': rec.get('vids', []),
+            'len': rec.get('len') or 240, 'score': round(mv_score(rec), 2)}
+
+
+def _fresh_mv(r, aired):
+    return time.time() - aired.get(_key(r), 0) > 3 * 86400
+
+
+def _grow_mv_pool():
+    """Idle: look up one more song's video (one a minute, faster while the pool is low) and keep the likeliest ones on
+    the Mac. Returns whether it queued one."""
+    db, aired = _mv_read(), _load().get('mv_aired', {})
+    known = sorted((r for r in db.values() if r.get('vids')), key=lambda r: -mv_score(r))
+    ready = [r for r in known if cached(_mv_track(r)) and _fresh_mv(r, aired)]
+    if len(ready) >= MV_POOL or shutil.disk_usage(HOME).free < 6e9:
+        return False
+    if time.time() - _mv['last'] < (20 if len(ready) < 4 else 60):
+        return False
+    _mv['last'] = time.time()
+    if len(known) >= 3 * MV_POOL:  # enough looked up: bring down the best of them that aren't here
+        for r in known[:3 * MV_POOL]:
+            t = _mv_track(r)
+            if not cached(t) and _key(t) not in _fetch['want'] and _fresh_mv(r, aired):
+                want(t, 9000)
+                return True
+    todo = [c for k, c in mv_candidates().items() if k not in db]
+    if not todo:
+        return False
+    c = random.choice(todo)
+    try:
+        c.update(_mv_lookup(c), checked=time.time())
+    except Exception:
+        return False
+    with _lock:
+        db = _mv_read()
+        db[_key(c)] = c
+        _mv_write(db)
+    if c['vids'] and mv_score(c) >= (sorted(map(mv_score, known), reverse=True)[MV_POOL - 1] if len(known) >= MV_POOL else 0.3):
+        want(_mv_track(c), 9000)
+        return True
+    return False
+
+
+def mv_picks(rng, n=4, st=None):
+    """A music video mix, drawn by score (squared: the best far likelier, nothing ruled out), the ones already on the
+    Mac first, none aired in the last three days, no artist twice."""
+    db, aired = _mv_read(), (st or {}).get('mv_aired', {})
+    pool = [r for r in db.values() if r.get('vids') and _fresh_mv(r, aired)]
+    on_mac = [r for r in pool if cached(_mv_track(r))]
+    picks, artists = [], set()
+    for group in (on_mac, pool):
+        group = list(group)
+        while group and len(picks) < n:
+            r = rng.choices(group, [mv_score(x) ** 2 for x in group])[0]
+            group.remove(r)
+            a = r['artist'].split(' featuring ')[0].lower()
+            if a not in artists:
+                artists.add(a)
+                picks.append(_mv_track(r))
+    return picks
+
+
+def mv_react(item, at, delta):
+    """A skip (-1) or a star (+1) for whichever video in a FlyBoy Videos mix was on at `at` seconds in."""
+    if not item or item.get('kind') != 'videos':
+        return None
+    t0, hit = 0, None
+    for t in item['tracks']:
+        if at < t0 + t['len']:
+            hit = t
+            break
+        t0 += t['len']
+    hit = hit or item['tracks'][-1]
+    db = _mv_read()
+    r = db.get(_key(hit))
+    if r:
+        r['fb'] = max(-2, min(3, (r.get('fb') or 0) + delta))  # a few skips bury one; stars lift it, within reason
+        _mv_write(db)
+    return hit
+
+
+def mv_star():
+    """From the phone: you love the video that's on."""
+    with _lock:
+        cur = _load().get('current')
+        hit = mv_react(cur, time.time() - cur['start'], +1) if cur else None
+    return {'ok': bool(hit), 'title': f"{hit['artist']}: {hit['title']}" if hit else ''}
+
+
 # ---------------------------------------------------------------- YouTube for segments
 
 BLOCKED = DATA / 'yt_blocked.json'  # videos the TV's player refused (labels often bar embedding on other sites and TVs)
@@ -395,7 +554,7 @@ INDEX = TRACKS / 'index.json'  # "artist title" -> file, so a segment can lead w
 FMT = ('bestvideo[vcodec^=avc1][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]'  # H.264 + AAC: what the TV plays
        '/bestaudio[ext=m4a]/bestaudio')  # no video to be had: the song at least
 CLIP_FMT = 'bestvideo[vcodec^=avc1][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]'  # sports: picture or nothing, 720p fits the cap
-_fetch = {'want': {}, 'until': 0, 'backoff': 900, 'started': False}  # query -> (priority, candidate ids)
+_fetch = {'want': {}, 'until': 0, 'backoff': 900, 'started': False, 'turn': True}  # query -> (priority, candidate ids)
 _flock = threading.Lock()
 
 
@@ -413,7 +572,7 @@ def _index():
 def cached(t):
     """This song's file on the Mac, or ''. A sports clip counts only as a video: its sound alone is no use."""
     name = _index().get(_key(t), '')
-    if t.get('sport') and not name.endswith('.mp4'):
+    if (t.get('sport') or t.get('mv')) and not name.endswith('.mp4'):
         return ''
     return name if name and (TRACKS / name).is_file() else ''
 
@@ -445,7 +604,7 @@ class _Pushback(Exception):
 
 def _download(vid, clip=False):
     """One music video at the best quality the TV plays (H.264 up to 1080p with AAC), or its audio if that's all there is.
-    A sports clip (clip=True) is 720p video or nothing."""
+    A sports clip or a music video for FlyBoy Videos (clip=True) is 720p video or nothing: the TV is 768 lines anyway."""
     import engine
     import yt_dlp
     TRACKS.mkdir(exist_ok=True)
@@ -477,7 +636,13 @@ def want(t, priority):
     with _flock:
         old = _fetch['want'].get(_key(t))
         if not old or priority < old[0]:
-            _fetch['want'][_key(t)] = (priority, t['all'], bool(t.get('sport')))
+            _fetch['want'][_key(t)] = (priority, t['all'], bool(t.get('sport') or t.get('mv')))
+    start_fetcher()
+
+
+def start_fetcher():
+    """The fetcher runs from server start, so the Crates and FlyBoy Videos pools fill before anything asks."""
+    with _flock:
         if not _fetch['started']:
             _fetch['started'] = True
             threading.Thread(target=_fetcher, daemon=True).start()
@@ -493,8 +658,12 @@ def _fetcher():
             ready = time.time() >= _fetch['until']
             job = min(_fetch['want'].items(), key=lambda kv: kv[1][0]) if ready and _fetch['want'] else None
         if not job:
-            if ready and not _grow_crates_pool():
-                time.sleep(5)
+            if ready:  # idle: the Crates and FlyBoy Videos pools take turns, so neither starves the other
+                order = (_grow_mv_pool, _grow_crates_pool) if _fetch['turn'] else (_grow_crates_pool, _grow_mv_pool)
+                _fetch['turn'] = not _fetch['turn']
+                if any(grow() for grow in order):
+                    continue
+            time.sleep(5)  # nothing to do, or YouTube asked for a break: wait rather than spin
             continue
         key, (_, vids, clip) = job
         name = ''
@@ -559,7 +728,7 @@ def resolve(item):
     """Find a segment's songs on YouTube (a search, light on YouTube) and attach any already on the Mac."""
     for t in item.get('tracks') or item.get('records') or []:
         if not t.get('all'):
-            t['all'] = _yt(f"{t['artist']} {t['title']}", embeddable=False)
+            t['all'] = _mv_lookup(t)['vids'] if t.get('mv') else _yt(f"{t['artist']} {t['title']}", embeddable=False)
             bad = blocked()
             t['vids'] = [v for v in t['all'] if v not in bad]
             t['vid'] = t['vids'][0] if t['vids'] else ''
@@ -702,6 +871,14 @@ def pick(kind, st, rng, ref=None):
         title = lane if lane else sports.DESKS[d.split(':')[0]][0]
         return {'kind': 'sports', 'title': f'FlyBoy Sports · {title}', 'show': 'FlyBoy Sports', 'desk': d, 'lead': lead,
                 'tracks': lead_with_cached(clips), 'beats': some_beats(rng, 1), 'per': 90, 'dur': lead + 90 * len(clips)}
+    if kind == 'videos':
+        picks = mv_picks(rng, 4, st)
+        if len(picks) < 2:
+            return None
+        for t in picks:
+            st.setdefault('mv_aired', {})[_key(t)] = time.time()
+        return {'kind': 'videos', 'title': 'FlyBoy Videos', 'show': 'From the FlyBoyRadio playlists', 'tracks': picks,
+                'beats': some_beats(rng, 1), 'dur': sum(t['len'] for t in picks)}
     if kind == 'yourday':  # one of your beats underneath
         return {'kind': 'yourday', 'title': 'Your Day', 'dur': SEG_LEN['yourday'], 'beats': some_beats(rng, 1)}
     if kind == 'tapes':
@@ -989,12 +1166,13 @@ def skip():
     with _lock:
         st = _load()
         if st.get('current'):
+            mv_react(st['current'], time.time() - st['current']['start'], -1)  # skipping a music video says something about it
             st['current']['dur'] = max(1, int(time.time() - st['current']['start']))
             _save(st)
     return now()
 
 
-ON_DEMAND = ('queenpin', 'tapes', 'vault', 'crates', 'yourday', 'series', 'course', 'film', 'promo', 'recording', 'sports')
+ON_DEMAND = ('queenpin', 'tapes', 'vault', 'crates', 'yourday', 'series', 'course', 'film', 'promo', 'recording', 'sports', 'videos')
 
 
 def _promo_title(src):
@@ -1054,6 +1232,7 @@ def library():
             ('tapes', 'Ride With Me', 'Three beats over the night drive'),
             ('vault', 'FlyBoyRadio Vault', 'A show from this week of the year'),
             ('crates', 'From the Crates', 'Three records from the digging list'),
+            ('videos', 'FlyBoy Videos', 'Four music videos from the FlyBoyRadio playlists, full screen'),
             ('yourday', 'Your Day', 'Calendar, to-dos, notes, Keys and weather'),
             ('sports', 'FlyBoy Sports', "Whichever desk is in season: scores, leaders, the models' reads, then the tape"),
             ('recording', 'FlyBoyRadio, live on WMUC', 'The 6 Feb 2011 show, all three hours')]
@@ -1096,7 +1275,7 @@ def _prepare(cur, q):
             _busy.add(('desk', key))
             import sports
             sports.warm(it['desk'])  # so the TV's ask is answered from the cache, even when a site has to wake
-        if it['kind'] in ('vault', 'crates', 'sports'):
+        if it['kind'] in ('vault', 'crates', 'sports', 'videos'):
             lst = it.get('tracks') or it.get('records') or []
             if any(not t.get('all') for t in lst):
                 if key not in _busy:

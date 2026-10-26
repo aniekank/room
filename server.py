@@ -364,6 +364,8 @@ class Handler(SimpleHTTPRequestHandler):
             if body.get('id'):
                 station.block(body['id'])
             return self._json({'ok': True})
+        if p == '/api/station/star':  # from the phone: you love the music video that's on
+            return self._json(station.mv_star())
         if p == '/api/station/skip':
             return self._json(station.skip())
         if p == '/api/movies/pos':  # the TV reports where you are
@@ -393,6 +395,7 @@ def serve(port=PORT, warm=True):
     convert.start(log)  # only when convert_videos is on
     station.warm_beats(log)
     station.keep_shelf(log)
+    station.start_fetcher()
     import funk
     funk.start([r['artist'] for r in station.crates()], log)
     art.start(log)

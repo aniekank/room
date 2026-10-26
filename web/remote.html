@@ -113,6 +113,7 @@
   <div class="grid">
     <button data-do="guide">Guide</button><button data-do="skip">Next ▶</button><button data-ch2="">Home</button>
   </div>
+  <button class="wide hide" id="mvStar">★ Love this video</button>
   <div class="kicker" style="margin-top:16px">On demand</div>
   <div class="cities" id="odShelves"></div>
   <div class="readyline" id="odReady"></div>
@@ -181,6 +182,11 @@ $('save').onclick = async () => {
   $('digMsg').textContent = r.ok ? 'Saved at ' + fmtT(r.saved.t) + '.' : 'Nothing playing to save.';
   if (navigator.vibrate) navigator.vibrate(30);
   refresh();
+};
+$('mvStar').onclick = async () => {  // FlyBoy Videos learns from this, and from what you skip
+  const r = await post('/api/station/star', {});
+  $('msg').textContent = r.ok ? '★ ' + r.title + '. More like this.' : 'No music video on right now.';
+  if (navigator.vibrate) navigator.vibrate(30);
 };
 $('lanes').onchange = (e) => cmd({ do: 'lane', lane: e.target.value });
 
@@ -262,6 +268,7 @@ async function refresh() {
   }
   if (ch === 'station') {
     $('stTitle').textContent = tv.title || '';
+    $('mvStar').classList.toggle('hide', tv.kind !== 'videos');
     if (Date.now() - stArtAt > 10000) { stArtAt = Date.now(); fetch('/api/home').then(r => r.json()).then(h => { stArt = (h.station || {}).art || ''; art('st', stArt); }); }
     $('stShow').textContent = tv.show || ({ vault: 'FlyBoyRadio Vault', crates: 'From the Crates', yourday: 'Your Day', ident: 'FlyBoy[TV]' })[tv.kind] || '';
   }
