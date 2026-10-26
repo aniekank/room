@@ -31,7 +31,7 @@ HOME = Path.home()
 KIT_DEFAULT = movies.ICLOUD / 'FlyBoy[TV]'
 SOURCE_DEFAULT = HOME / 'Desktop' / 'FlyBoyRadio'
 STATE = DATA / 'station.json'
-_lock = threading.Lock()
+_lock = threading.RLock()  # crates_picks marks what aired while now() already holds it
 
 DAYPARTS = [  # (from hour, name, what airs, weighted)
     (2, 'Overnight', {'tapes': 4, 'vault': 2, 'crates': 2}),
